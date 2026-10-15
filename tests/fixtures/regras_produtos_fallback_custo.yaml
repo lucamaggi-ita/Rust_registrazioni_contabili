@@ -1,0 +1,23 @@
+# FIXTURE DE TESTE - NAO E' FONTE DE REGRAS.
+#
+# Copia reduzida de config/regras_classificacao_produtos.yaml com um unico
+# defeito proposital: conta_fallback_id aponta para 2.01.001 (Cervejas, tipo
+# custo) em vez de uma conta de revisao.
+#
+# Serve ao teste de regressao R1: a CLI padrao, sem --estrito, deve REPROVAR.
+versao: "1.0"
+idioma: pt-BR
+descricao: fixture de teste com fallback fora da area de revisao
+normalizacao:
+  minusculas: true
+  remover_acentos: true
+  remover_pontuacao: true
+  compactar_espacos: true
+regras:
+  - conta_id: "2.01.001"
+    conta_nome: "Cervejas"
+    prioridade: 100
+    aliases:
+      - cerveja
+conta_fallback_id: "2.01.001"
+conta_fallback_nome: "Cervejas"
