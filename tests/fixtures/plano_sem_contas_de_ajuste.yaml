@@ -1,0 +1,28 @@
+# FIXTURE DE TESTE - NAO E O PLANO CANONICO.
+#
+# Plano reduzido e **propositalmente defeituoso**: valido na forma, mas sem as
+# contas de ajuste 2.05.001 e 2.05.002 que a alocacao exige quando o total da
+# NF-e difere da soma dos produtos.
+#
+# Serve a uma regressao do riscontro R3B-03 (audit de 2026-10-16): provar que
+# `ErroAlocacao::ContaDeAjusteAusente` chega pela API publica, nomeando a conta.
+# Nao substitui `config/plano_contas_gerencial.yaml` e nao e' fonte de regras.
+versao: "1.0"
+idioma: pt-BR
+descricao: Plano de teste sem contas de ajuste (fixture do alocador)
+
+centros_custo:
+  - id: "CC01"
+    nome: "Cozinha"
+
+contas:
+  - id: "2.01.001"
+    nome: "Cervejas"
+    grupo: "Custos de Mercadorias e Insumos"
+    tipo: custo
+    exige_revisao: false
+  - id: "13.01.001"
+    nome: "Revisar - Produto Nao Classificado"
+    grupo: "Contas de Revisao e Classificacao Pendente"
+    tipo: revisao
+    exige_revisao: true

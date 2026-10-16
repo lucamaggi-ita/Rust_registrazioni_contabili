@@ -15,11 +15,16 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 |---|---|---|
 | 1 | Dependencias, modelo de dados, leitura e validacao das regras YAML | **PRONTA** (revisao 2026-10-15 aplicada) |
 | 2 | Leitura de NF-e (`quick-xml`), normalizacao de texto, classificacao produtos/despesas | **PRONTA** (revisoes 2026-10-15 e 2026-10-16 aplicadas; C17 fechado com audit independente) |
-| 3 | Alocacao em lancamentos, pre-livro diario, DRE gerencial, relatorios | NAO_INICIADA |
+| 3A | Analise e especificacao da alocacao (contratos, formulas, casos numericos) | **PRONTA** (`SPECIFICA_FASE3A_REGISTRAZIONI.md`, audit tecnico superado) |
+| 3B | Alocacao de NF-e em lancamentos com reconciliacao (`alocacao.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-16 (R3B-01/02/03 fechados); aguarda apenas o registro em Git autorizado |
+| 3C | Pre-livro diario, revisao, exportacao | NAO_INICIADA |
+| 3D | DRE gerencial por competencia | NAO_INICIADA |
 
-Funciona de ponta a ponta: validar a configuracao, ler uma NF-e em XML e
-classificar cada item contra o plano de contas. A fase 2 **nao grava nada**:
-transformar itens classificados em lancamentos e' a fase 3.
+Funciona de ponta a ponta: validar a configuracao, ler uma NF-e em XML,
+classificar cada item contra o plano de contas e **alocar o documento em
+lancamentos com reconciliacao**. A fase 3B **nao grava nada**: `alocar_nfe` e'
+uma funcao pura que devolve os lancamentos em memoria. Gravar, revisar e
+exportar e' 3C; agregar a DRE e' 3D.
 
 ## Uso
 
@@ -72,6 +77,58 @@ opera sobre uma configuracao que `validar-config` reprova.
 | C15 | Nenhum comando usa configuracao que `validar-config` reprova | `main.rs` | `tests/cli_configuracao_obrigatoria.rs` |
 | C16 | A auditoria de alias mede para onde o alias **leva de fato**, com baseline fixada | `classificacao.rs` | `auditoria_de_aliases_corresponde_a_baseline_declarada` |
 | C17 | **Um documento, uma NF-e.** Mais de uma raiz XML ou mais de um `<infNFe>`, **inclusive aninhado**, = erro com saida 1, nunca sucesso parcial na primeira nota | `nfe.rs` | `duas_raizes_sao_recusadas`, `segunda_raiz_fora_do_namespace_tambem_e_recusada`, `lote_com_duas_nfe_e_recusado`, `infnfe_aninhado_e_recusado`, `documento_canonico_tem_uma_so_nfe`, `tests/cli_importar_nfe.rs` |
+
+### Fase 3B - alocacao em lancamentos
+
+Numeracao definitiva dos contratos implementados em `alocacao.rs`, com o
+identificativo provisorio da especificacao 3A entre parenteses. As seis
+decisoes de dominio **D1-D6 foram aprovadas por Luca em 2026-10-16**.
+
+| ID | Contrato | Onde | Teste |
+|---|---|---|---|
+| C18 | **Uma registro por (documento, conta)**, na ordem de primeira aparicao; valor = soma dos `vProd` do grupo; diferenca de total em conta propria (F3A-01…06) | `alocacao.rs` | `aloca_campione_canonico_em_tres_lancamentos`, `diferenca_*` |
+| C19 | **Ausente nao explica.** Componente necessaria com `Dado` != `Ok` nao pode declarar explicada a diferenca: documento `PARCIAL`, diferenca `REVISAR` (F3A-07, **D2**) | `alocacao.rs` | `componente_parcial_nao_explica_diferenca`, `documento_parcial_com_componente_necessaria_parcial` |
+| C20 | **Rateio das duplicatas** sobre `vNF`, restos na ultima linha e coluna; tres invariantes verificadas; rateio nao definido = erro, nunca zero inventado (F3A-08…10, **D1**) | `alocacao.rs` | `riparto_das_rate_fecha_por_linha_e_por_coluna`, `total_zero_com_rate_nao_vira_zero_tecnico`, `total_netto_zero_com_lancamentos_nao_nulos` |
+| C21 | **Dominio monetario em centavos**: valor fora do dominio = erro que nomeia campo e valor; zeros finais nao desqualificam; `qCom`/`vUnCom` excluidos; `Dado` ausente nao e' zerado (F3A-26, **D6**) | `alocacao.rs` | `importo_fora_do_dominio_monetario_e_recusado`, `zeros_finais_nao_squalificam_o_importo`, `dado_assente_non_viene_azzerato_per_passare_il_dominio` |
+| C22 | **Identidade**: chave vazia bloqueia; numero e identidade de emitente/destinatario vazios vao a revisao com aviso proprio; `serie` sem efeito (F3A-23a/b, **D5**) | `alocacao.rs` | `chave_vazia_nao_produz_lancamento`, `numero_vazio_marca_revisar`, `*_sem_identidade_marca_revisar` |
+| C23 | **Hash de quatro campos** igual ao Python; payload repetido no mesmo documento e' aviso, nunca descarte; nenhuma deduplicacao persistente (F3A-15/27, **D4**) | `alocacao.rs` | `hash_do_campione_canonico_corresponde_ao_payload`, `payload_duplicado_no_documento_gera_aviso` |
+| C24 | **Reconciliacao com quatro esitos** independentes (total, duplicatas, cobertura, componentes) e uma regra de agregacao `ERRO > PARCIAL > OK`; o esperado de itens fica `NAO_DISPONIVEL`, nunca inventado (F3A-28) | `alocacao.rs` | `copertura_parcial_com_det_sem_prod`, `rate_que_nao_fecham_geram_valor_inconsistente` |
+
+**Limite tecnico, nao regra de dominio.** Toda a aritmetica de `alocacao.rs`
+acontece em **centavos inteiros** (`i128`), nao em `Decimal`. Riscontro R3B-01
+do audit de 2026-10-16: com importes extremos mas legitimos pelo dominio de
+C21, `Decimal` entra em panico no produto do rateio e **perde um centavo em
+silencio** na soma — `checked_add` inclusive, que devolve `Some` com o valor
+arredondado. Em centavos inteiros a soma e o produto sao exatos; quando o
+resultado nao cabe, o alocador devolve
+`ErroAlocacao::CapacidadeNumericaExcedida` nomeando operacao e valores, em vez
+de um resultado parcial ou de um panico. **Nao e' um teto de importe aprovado**:
+e' o limite da representacao, declarado.
+
+Duas precisoes vindas do audit mirado (R3B-01, residuos A e B):
+
+1. a volta de centavos para `Decimal` **reduz zeros finais** baixando a escala
+   ate 0 quando precisa, porque um valor inteiro grande e' representavel a
+   escala 0 mesmo quando `mantissa x 100` nao cabe: impor escala 2 restringia
+   artificialmente o dominio do proprio `Decimal`. Nenhum digito diferente de
+   zero e' descartado e nada e' arredondado;
+2. divisao e resto do rateio usam `checked_div`/`checked_rem`, porque
+   `i128::MIN / -1` nao e' representavel e os operadores comuns entrariam em
+   **panico**.
+
+Testes: `riparto_com_importi_estremi_nao_entra_em_panico`,
+`dois_itens_extremos_em_contas_distintas_preservam_o_centavo`,
+`valor_agregado_nao_representavel_e_erro`,
+`divisao_do_rateio_nao_entra_em_panico_com_minimo`,
+`round_trip_de_centesimos_respeita_o_dominio_de_decimal`,
+`decimal_perde_centavo_na_soma_extrema`,
+`decimal_estoura_no_produto_do_rateio`.
+
+Decisoes registradas tambem aqui: um item sem descricao **e' conservado** com
+aviso `ITEM_SEM_DESCRICAO` e `REVISAR`, sem inventar descricao (F3A-24); a
+linha DRE e o centro de custo ficam declarados em
+`Reconciliacao::campi_rinviati` com estado, fonte e motivo, em vez de serem
+strings vazias silenciosas (F3A-17/18/19).
 
 O Python so le `regras` e `conta_fallback_id`. C13 torna visivel o resto:
 
@@ -164,6 +221,7 @@ atualizada junto com uma decisao declarada sobre as regras.
 | `rust_decimal` | valores monetarios exatos | `f64` daria erro de precisao silencioso em dinheiro |
 | `chrono` | datas (`NaiveDate`) | equivalente de `datetime.date` |
 | `unicode-normalization` | NFD + remocao de acentos | equivalente de `unicodedata` do Python |
+| `sha2` | `hash_registro` dos lancamentos (fase 3B) | adicionada em 2026-10-16 com autorizacao explicita; mesmo payload de quatro campos do Python, para que os codigos continuem comparaveis com o historico |
 
 ## Verificacao
 
@@ -173,7 +231,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-113 testes: 97 de unidade na lib, 3 no binario, 13 de integracao de CLI.
+166 testes: 150 de unidade na lib, 3 no binario, 13 de integracao de CLI.
 
 Testes que amarram o codigo aos dados reais, nao a fixtures:
 
@@ -199,6 +257,7 @@ origem, como foi construida e o que se espera dela:
 | `nfe_sem_fat.xml` | campione canonico sem o bloco `<fat>`, as duas parcelas de 17.50 ficam | C10 |
 | `nfe_duas_raizes.xml` | dois documentos concatenados, a segunda nota com `nNF` 12567 | C17 |
 | `nfe_infnfe_annidata.xml` | XML bem formado com um `<infNFe>` aninhado dentro do outro | C17 |
+| `plano_sem_contas_de_ajuste.yaml` | plano valido na forma, **sem** `2.05.001`/`2.05.002` | C18, C24 (erro `ContaDeAjusteAusente`) |
 
 Nao sao fonte de regras nem substituem o campione: este nunca e' alterado para
 fazer um teste passar.

@@ -7,8 +7,11 @@
 //! ([`normalizacao`]) e classificacao de produtos e despesas
 //! ([`classificacao`]).
 //!
-//! Fase 3 (pendente): alocacao em lancamentos, pre-livro diario, DRE gerencial.
+//! Fase 3B: alocacao de NF-e em lancamentos com reconciliacao ([`alocacao`]).
+//!
+//! Fase 3C/3D (pendentes): pre-livro diario, revisao, exportacao e DRE.
 
+pub mod alocacao;
 pub mod classificacao;
 pub mod modelos;
 pub mod nfe;
