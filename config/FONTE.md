@@ -28,5 +28,10 @@ Contratto operativo:
 - `plano_contas_gerencial.yaml` (125 conte, 11 centri di costo)
 - `regras_classificacao_produtos.yaml` (29 regole + 1 regola per fornitore)
 - `regras_classificacao_despesas.yaml` (26 regole)
-- `mapeamento_dre.yaml` (non ancora letto dal codice Rust: fase 3)
-- `csv_columns.yaml` (non ancora letto dal codice Rust: fase 2)
+- `mapeamento_dre.yaml` (non letto dal codice Rust: previsto per la fase 3, DRE)
+- `csv_columns.yaml` (non letto dal codice Rust: la fase 2 non importa CSV, e la
+  fase che lo leggera' non e' ancora definita)
+
+Stato di lettura al 2026-10-16: i primi tre file sono letti e validati; gli
+ultimi due sono `NON_LETTO`, copia versionata in attesa della fase che li usa.
+Il README li elenca fra i rischi noti per lo stesso motivo.
