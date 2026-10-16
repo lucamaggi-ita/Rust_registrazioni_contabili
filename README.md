@@ -14,7 +14,7 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 | Fase | Conteudo | Estado |
 |---|---|---|
 | 1 | Dependencias, modelo de dados, leitura e validacao das regras YAML | **PRONTA** (revisao 2026-10-15 aplicada) |
-| 2 | Leitura de NF-e (`quick-xml`), normalizacao de texto, classificacao produtos/despesas | **PRONTA** (revisao 2026-10-15 aplicada) |
+| 2 | Leitura de NF-e (`quick-xml`), normalizacao de texto, classificacao produtos/despesas | **PRONTA** (revisoes 2026-10-15 e 2026-10-16 aplicadas; C17 fechado com audit independente) |
 | 3 | Alocacao em lancamentos, pre-livro diario, DRE gerencial, relatorios | NAO_INICIADA |
 
 Funciona de ponta a ponta: validar a configuracao, ler uma NF-e em XML e
@@ -71,7 +71,7 @@ opera sobre uma configuracao que `validar-config` reprova.
 | C14 | O parser nao altera conteudo XML valido: entidades (`&amp;`, `&#46;`) e CDATA entram no texto | `nfe.rs` | `referencias_de_caractere_sao_resolvidas`, `cdata_entra_no_texto` |
 | C15 | Nenhum comando usa configuracao que `validar-config` reprova | `main.rs` | `tests/cli_configuracao_obrigatoria.rs` |
 | C16 | A auditoria de alias mede para onde o alias **leva de fato**, com baseline fixada | `classificacao.rs` | `auditoria_de_aliases_corresponde_a_baseline_declarada` |
-| C17 | **Um documento, uma NF-e.** Mais de uma raiz XML ou mais de um `<infNFe>` = erro com saida 1, nunca sucesso parcial na primeira nota | `nfe.rs` | `duas_raizes_sao_recusadas`, `segunda_raiz_fora_do_namespace_tambem_e_recusada`, `lote_com_duas_nfe_e_recusado`, `tests/cli_importar_nfe.rs` |
+| C17 | **Um documento, uma NF-e.** Mais de uma raiz XML ou mais de um `<infNFe>`, **inclusive aninhado**, = erro com saida 1, nunca sucesso parcial na primeira nota | `nfe.rs` | `duas_raizes_sao_recusadas`, `segunda_raiz_fora_do_namespace_tambem_e_recusada`, `lote_com_duas_nfe_e_recusado`, `infnfe_aninhado_e_recusado`, `documento_canonico_tem_uma_so_nfe`, `tests/cli_importar_nfe.rs` |
 
 O Python so le `regras` e `conta_fallback_id`. C13 torna visivel o resto:
 
@@ -190,10 +190,18 @@ Testes que amarram o codigo aos dados reais, nao a fixtures:
   que nenhum comando aceita configuracao reprovada.
 
 `tests/fixtures/` contem copias **propositalmente defeituosas ou reduzidas**,
-usadas pelos testes de regressao: `regras_produtos_fallback_custo.yaml` (regras
-com fallback errado) e `nfe_sem_fat.xml` (o campione canonico sem o bloco
-`<fat>`). Nao sao fonte de regras nem substituem o campione: este nunca e'
-alterado para fazer um teste passar.
+usadas pelos testes de regressao. Cada uma declara no proprio cabecalho a
+origem, como foi construida e o que se espera dela:
+
+| Fixture | Defeito intencional | Protege |
+|---|---|---|
+| `regras_produtos_fallback_custo.yaml` | fallback que nao e' conta de revisao | C6, C15 |
+| `nfe_sem_fat.xml` | campione canonico sem o bloco `<fat>`, as duas parcelas de 17.50 ficam | C10 |
+| `nfe_duas_raizes.xml` | dois documentos concatenados, a segunda nota com `nNF` 12567 | C17 |
+| `nfe_infnfe_annidata.xml` | XML bem formado com um `<infNFe>` aninhado dentro do outro | C17 |
+
+Nao sao fonte de regras nem substituem o campione: este nunca e' alterado para
+fazer um teste passar.
 
 ## Riscos conhecidos
 
@@ -214,3 +222,8 @@ alterado para fazer um teste passar.
    explicita, nao silenciosa.
 8. Os 7 alias divergentes e 11 ambiguos da tabela C16 continuam como estao:
    sao dados para decisao, nao bugs corrigidos de oficio.
+9. **Nao existe validacao XSD.** C17 conta raizes e `<infNFe>`, nao verifica o
+   layout: um XML bem formado mas fora do layout NF-e (por exemplo `infNFe`
+   aninhado) e' recusado pela contagem, nao por um schema. Se a validacao real
+   do layout for necessaria, e' uma decisao separada, com fonte e testes
+   proprios.
