@@ -71,6 +71,7 @@ opera sobre uma configuracao que `validar-config` reprova.
 | C14 | O parser nao altera conteudo XML valido: entidades (`&amp;`, `&#46;`) e CDATA entram no texto | `nfe.rs` | `referencias_de_caractere_sao_resolvidas`, `cdata_entra_no_texto` |
 | C15 | Nenhum comando usa configuracao que `validar-config` reprova | `main.rs` | `tests/cli_configuracao_obrigatoria.rs` |
 | C16 | A auditoria de alias mede para onde o alias **leva de fato**, com baseline fixada | `classificacao.rs` | `auditoria_de_aliases_corresponde_a_baseline_declarada` |
+| C17 | **Um documento, uma NF-e.** Mais de uma raiz XML ou mais de um `<infNFe>` = erro com saida 1, nunca sucesso parcial na primeira nota | `nfe.rs` | `duas_raizes_sao_recusadas`, `segunda_raiz_fora_do_namespace_tambem_e_recusada`, `lote_com_duas_nfe_e_recusado`, `tests/cli_importar_nfe.rs` |
 
 O Python so le `regras` e `conta_fallback_id`. C13 torna visivel o resto:
 
@@ -172,7 +173,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-105 testes: 92 de unidade na lib, 3 no binario, 10 de integracao de CLI.
+113 testes: 97 de unidade na lib, 3 no binario, 13 de integracao de CLI.
 
 Testes que amarram o codigo aos dados reais, nao a fixtures:
 

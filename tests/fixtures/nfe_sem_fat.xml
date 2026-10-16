@@ -1,8 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!-- FIXTURE DE TESTE - NAO E O CAMPIONE CANONICO.
      Copia de samples/nfe_exemplo/nfe_oesa_12566_20260505.xml com o bloco
      <fat>...</fat> removido, para provar que a ausencia do valor de
      faturamento nao vira zero. As duas parcelas de 17.50 permanecem. -->
-<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
   <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
     <infNFe versao="4.00" Id="NFe29260512345678000195550010001256612345678901">

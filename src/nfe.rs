@@ -5,9 +5,17 @@
 //! dei soli elementi nel namespace NF-e e lo si naviga come fa il Python.
 //!
 //! Contratto C10: il Python converte in zero ogni totale assente
-//! (`Decimal(_text(elem, tag) or "0")`). Qui il valore resta zero, per non
-//! cambiare l'output, ma ogni conversione del genere lascia un [`Aviso`]:
-//! lo zero tecnico diventa visibile invece di sparire.
+//! (`Decimal(_text(elem, tag) or "0")`). Qui l'assenza **non diventa zero**:
+//! un valore obbligatorio per il layout e' un errore con il percorso del
+//! campo, un importo facoltativo assente resta assente in un [`Dado`] con
+//! stato e motivo (`N.A.`, `NAO_DISPONIVEL`, `MANCANTE`), e un aggregato a
+//! cui manca un componente esce `PARCIAL`. Nessun valore pubblico e' zero
+//! solo perche' la tag non c'era.
+//!
+//! Contratto C17: il documento deve contenere **una sola radice XML e una
+//! sola NF-e**. Piu' radici (due documenti concatenati) o piu' `<infNFe>`
+//! nello stesso documento sono un errore con uscita 1, non un successo
+//! parziale sulla prima fattura con le altre scartate in silenzio.
 
 use std::path::Path;
 
@@ -45,6 +53,12 @@ pub enum ErroNfe {
     Texto { origem: String, detalhe: String },
     /// Nessun `<infNFe>`: evento, cancellazione o file non NF-e.
     NaoEhNfe { origem: String },
+    /// Piu' di un elemento radice: non e' un documento XML ben formato, ed e'
+    /// il caso dei due XML concatenati. C17: niente lettura parziale.
+    DocumentoComMultiplasRaizes { origem: String },
+    /// Documento ben formato ma con piu' di una NF-e (per esempio un lotto
+    /// `enviNFe`). C17: leggere solo la prima perderebbe le altre in silenzio.
+    MultiplasNfeNoDocumento { origem: String, encontradas: usize },
     /// Elemento obbligatorio assente (il Python fallirebbe allo stesso punto).
     CampoObrigatorio { origem: String, campo: &'static str },
     /// Valore obbligatorio per il layout assente: non diventa zero.
@@ -81,6 +95,19 @@ impl std::fmt::Display for ErroNfe {
             ErroNfe::NaoEhNfe { origem } => {
                 write!(f, "nao e' uma NF-e valida (sem <infNFe>): {origem}")
             }
+            ErroNfe::DocumentoComMultiplasRaizes { origem } => write!(
+                f,
+                "{origem}: XML com mais de um elemento raiz (documentos concatenados); \
+                 nenhuma NF-e foi lida"
+            ),
+            ErroNfe::MultiplasNfeNoDocumento {
+                origem,
+                encontradas,
+            } => write!(
+                f,
+                "{origem}: {encontradas} <infNFe> no mesmo documento; \
+                 importar-nfe le uma NF-e por arquivo e nao descarta as outras em silencio"
+            ),
             ErroNfe::CampoObrigatorio { origem, campo } => {
                 write!(f, "{origem}: elemento obrigatorio ausente: {campo}")
             }
@@ -179,6 +206,22 @@ impl Elemento {
         self.filhos.iter().find_map(|f| f.descendente(nome))
     }
 
+    /// Quante occorrenze con quel nome esistono (come `len(.//tag)`).
+    ///
+    /// A differenza di [`Elemento::descendente`], la ricerca **non si ferma**
+    /// sull'elemento trovato: scende anche sotto di lui. Riscontro B1
+    /// dell'audit del 2026-10-16: fermandosi, un `<infNFe>` annidato dentro un
+    /// altro contava come uno e C17 lasciava passare il documento.
+    fn contar_descendentes(&self, nome: &str) -> usize {
+        let proprio = usize::from(self.nome == nome);
+        proprio
+            + self
+                .filhos
+                .iter()
+                .map(|f| f.contar_descendentes(nome))
+                .sum::<usize>()
+    }
+
     /// Testo di un figlio, stringa vuota se assente (come `_text` del Python).
     fn texto_de(&self, nome: &str) -> String {
         self.filho(nome)
@@ -199,6 +242,10 @@ fn construir_arvore(xml: &str, origem: &str) -> Result<Elemento, ErroNfe> {
     // Profondita' degli elementi ignorati (fuori dal namespace NF-e).
     let mut ignorados = 0usize;
     let mut total = 0usize;
+    // C17: elementi aperti al livello della radice. `quick-xml` non impone la
+    // radice unica, quindi due documenti concatenati arriverebbero qui come
+    // due figli di `#documento` e la seconda NF-e sparirebbe.
+    let mut raizes = 0usize;
 
     loop {
         let (ns, evento) = leitor.read_resolved_event().map_err(|erro| ErroNfe::Xml {
@@ -210,6 +257,12 @@ fn construir_arvore(xml: &str, origem: &str) -> Result<Elemento, ErroNfe> {
             Event::Eof => break,
             Event::Start(inicio) => {
                 let no_namespace = matches!(ns, ResolveResult::Bound(Namespace(n)) if n == NS_NFE);
+                // Il conteggio delle radici precede il filtro di namespace:
+                // anche una seconda radice fuori dal namespace NF-e e' un
+                // secondo documento, non un elemento da ignorare.
+                if ignorados == 0 && pilha.is_empty() {
+                    contar_raiz(&mut raizes, origem)?;
+                }
                 // Un elemento fuori namespace nasconde tutto il suo sottoalbero
                 // (per esempio ds:Signature), come fanno le find() del Python.
                 if ignorados > 0 || !no_namespace {
@@ -222,6 +275,9 @@ fn construir_arvore(xml: &str, origem: &str) -> Result<Elemento, ErroNfe> {
             }
             Event::Empty(inicio) => {
                 let no_namespace = matches!(ns, ResolveResult::Bound(Namespace(n)) if n == NS_NFE);
+                if ignorados == 0 && pilha.is_empty() {
+                    contar_raiz(&mut raizes, origem)?;
+                }
                 // `<tag/>` non produce un End: va chiuso qui, altrimenti la
                 // pila si disallinea.
                 if ignorados > 0 || !no_namespace {
@@ -304,6 +360,17 @@ fn montar_elemento(inicio: &quick_xml::events::BytesStart<'_>) -> Elemento {
     elemento
 }
 
+/// C17: conta un elemento aperto al livello della radice e rifiuta il secondo.
+fn contar_raiz(raizes: &mut usize, origem: &str) -> Result<(), ErroNfe> {
+    *raizes += 1;
+    if *raizes > 1 {
+        return Err(ErroNfe::DocumentoComMultiplasRaizes {
+            origem: origem.to_string(),
+        });
+    }
+    Ok(())
+}
+
 fn verificar_limites(total: usize, profundidade: usize, origem: &str) -> Result<(), ErroNfe> {
     if total > ELEMENTOS_MAXIMO {
         return Err(ErroNfe::LimiteExcedido {
@@ -338,6 +405,15 @@ pub fn ler_nfe(caminho: impl AsRef<Path>) -> Result<NfeImportada, ErroNfe> {
 /// Legge una NF-e da testo XML. `origem` finisce in `Nfe::arquivo_origem`.
 pub fn ler_nfe_de_texto(xml: &str, origem: &str) -> Result<NfeImportada, ErroNfe> {
     let documento = construir_arvore(xml, origem)?;
+    // C17: un documento ben formato puo' comunque portare un lotto di NF-e
+    // (`enviNFe`). Leggerne solo la prima perderebbe le altre in silenzio.
+    let encontradas = documento.contar_descendentes("infNFe");
+    if encontradas > 1 {
+        return Err(ErroNfe::MultiplasNfeNoDocumento {
+            origem: origem.to_string(),
+            encontradas,
+        });
+    }
     let inf_nfe = documento
         .descendente("infNFe")
         .ok_or_else(|| ErroNfe::NaoEhNfe {
@@ -1120,6 +1196,91 @@ mod tests {
 <procEventoNFe xmlns="http://www.portalfiscal.inf.br/nfe"><evento/></procEventoNFe>"#;
         let erro = ler_nfe_de_texto(xml, "teste://evento").unwrap_err();
         assert!(matches!(erro, ErroNfe::NaoEhNfe { .. }), "{erro}");
+    }
+
+    // -----------------------------------------------------------------
+    // C17: un documento, una NF-e.
+    //
+    // Riscontro A1 dell'audit indipendente del 2026-10-16: due XML
+    // concatenati uscivano con codice 0, mostravano solo la NF-e 12566 e
+    // scartavano la seconda in silenzio. Fixture derivate e dichiarate: il
+    // campione canonico non viene toccato.
+    // -----------------------------------------------------------------
+
+    /// Due documenti concatenati non sono un documento XML ben formato.
+    #[test]
+    fn duas_raizes_sao_recusadas() {
+        let primeiro = nfe_com_cobranca("<cobr><fat><nFat>1</nFat><vLiq>35.00</vLiq></fat></cobr>");
+        let segundo = primeiro.replace(r#"<?xml version="1.0"?>"#, "");
+        let erro =
+            ler_nfe_de_texto(&format!("{primeiro}{segundo}"), "teste://duas-raizes").unwrap_err();
+        assert!(
+            matches!(erro, ErroNfe::DocumentoComMultiplasRaizes { .. }),
+            "{erro}"
+        );
+    }
+
+    /// La seconda radice conta anche se e' fuori dal namespace NF-e: e' un
+    /// secondo documento, non un sottoalbero da ignorare.
+    #[test]
+    fn segunda_raiz_fora_do_namespace_tambem_e_recusada() {
+        let xml = format!(
+            r#"{}<outro xmlns="http://exemplo.invalido/outro"><a>1</a></outro>"#,
+            nfe_com_cobranca("")
+        );
+        let erro = ler_nfe_de_texto(&xml, "teste://raiz-estranha").unwrap_err();
+        assert!(
+            matches!(erro, ErroNfe::DocumentoComMultiplasRaizes { .. }),
+            "{erro}"
+        );
+    }
+
+    /// Documento ben formato ma con due NF-e (lotto `enviNFe`): la radice
+    /// unica non basta, serve anche una sola `<infNFe>`.
+    #[test]
+    fn lote_com_duas_nfe_e_recusado() {
+        let interna = nfe_com_cobranca("").replace(r#"<?xml version="1.0"?>"#, "");
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+<enviNFe xmlns="http://www.portalfiscal.inf.br/nfe">{interna}{interna}</enviNFe>"#
+        );
+        let erro = ler_nfe_de_texto(&xml, "teste://lote").unwrap_err();
+        assert!(
+            matches!(
+                erro,
+                ErroNfe::MultiplasNfeNoDocumento { encontradas: 2, .. }
+            ),
+            "{erro}"
+        );
+    }
+
+    /// `<infNFe>` annidato dentro un altro: documento ben formato, fuori
+    /// layout NF-e, due occorrenze. Riscontro B1: il conteggio si fermava sul
+    /// primo nodo trovato e il documento passava con la sola prima nota.
+    #[test]
+    fn infnfe_aninhado_e_recusado() {
+        let xml = nfe_com_cobranca("").replace(
+            "</infNFe>",
+            r#"<infNFe Id="NFe456"><ide><nNF>2</nNF></ide></infNFe></infNFe>"#,
+        );
+        let erro = ler_nfe_de_texto(&xml, "teste://aninhado").unwrap_err();
+        assert!(
+            matches!(
+                erro,
+                ErroNfe::MultiplasNfeNoDocumento { encontradas: 2, .. }
+            ),
+            "{erro}"
+        );
+    }
+
+    /// C17 non deve irrigidire il caso buono: il campione canonico ha una
+    /// radice e una sola NF-e, e continua a essere letto.
+    #[test]
+    fn documento_canonico_tem_uma_so_nfe() {
+        let xml = std::fs::read_to_string(caminho_exemplo()).expect("campione leggibile");
+        let documento = construir_arvore(&xml, "teste://canonico").expect("uma raiz");
+        assert_eq!(documento.contar_descendentes("infNFe"), 1);
+        assert_eq!(exemplo().nfe.numero, "12566");
     }
 
     #[test]
