@@ -11,7 +11,7 @@ fn raiz() -> PathBuf {
 }
 
 fn validar_config(args: &[&str]) -> (bool, String) {
-    let saida = Command::new(env!("CARGO_BIN_EXE_rust_schede_tecniche"))
+    let saida = Command::new(env!("CARGO_BIN_EXE_rust_registrazioni_contabili"))
         .current_dir(raiz())
         .arg("validar-config")
         .args(args)

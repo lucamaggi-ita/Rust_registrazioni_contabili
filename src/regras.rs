@@ -394,6 +394,19 @@ impl RegrasClassificacao {
         })
     }
 
+    /// Carica da testo YAML. `origem` serve solo a dare una fonte ai messaggi.
+    pub fn de_texto(texto: &str, origem: &str) -> Result<Self, ErroConfig> {
+        let yaml: RegrasClassificacaoYaml =
+            serde_yaml::from_str(texto).map_err(|erro| ErroConfig::Yaml {
+                caminho: PathBuf::from(origem),
+                erro,
+            })?;
+        Ok(Self {
+            yaml,
+            fonte: PathBuf::from(origem),
+        })
+    }
+
     pub fn fonte(&self) -> &Path {
         &self.fonte
     }
@@ -430,6 +443,29 @@ impl RegrasClassificacao {
                 "C6_SEM_REGRAS",
                 &local,
                 "arquivo de regras vazio: nenhuma classificacao seria aplicada",
+            ));
+        }
+
+        // Contratto C13: sezioni dichiarate nello YAML che il classificatore
+        // non applica. Non sono errori (il Python si comporta cosi'), ma non
+        // devono restare invisibili: chi legge lo YAML crede che valgano.
+        if !self.yaml.regras_por_fornecedor.is_empty() {
+            problemas.push(Problema::alerta(
+                "C13_SECAO_NAO_APLICADA",
+                &local,
+                format!(
+                    "regras_por_fornecedor: {} regra(s) declarada(s) e nao aplicada(s) pelo classificador \
+                     (no Python so classification_rule_proposal.py as le)",
+                    self.yaml.regras_por_fornecedor.len()
+                ),
+            ));
+        }
+        if self.yaml.politica_de_match.is_some() {
+            problemas.push(Problema::alerta(
+                "C13_SECAO_NAO_APLICADA",
+                &local,
+                "politica_de_match: declarada e nao aplicada pelo classificador \
+                 (p.ex. alias de ate 3 caracteres deveriam casar so por palavra inteira)",
             ));
         }
 

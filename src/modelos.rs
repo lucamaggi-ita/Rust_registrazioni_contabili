@@ -48,6 +48,21 @@ pub enum StatusDado {
 }
 
 impl StatusDado {
+    /// Etichetta stabile, quella che compare negli output.
+    pub const fn rotulo(self) -> &'static str {
+        match self {
+            StatusDado::Ok => "OK",
+            StatusDado::Mancante => "MANCANTE",
+            StatusDado::NaoVerificado => "NAO_VERIFICADO",
+            StatusDado::NaoDisponivel => "NAO_DISPONIVEL",
+            StatusDado::Parcial => "PARCIAL",
+            StatusDado::Estimado => "ESTIMADO",
+            StatusDado::Erro => "ERRO",
+            StatusDado::Bloqueado => "BLOQUEADO",
+            StatusDado::NaoAplicavel => "N.A.",
+        }
+    }
+
     /// `true` se lo stato afferma che il valore **non** c'e'.
     ///
     /// E' l'unica regola che lega stato e valore: `Parcial` e `Estimado`
@@ -185,6 +200,31 @@ impl<T> Dado<T> {
     /// `true` solo per un dato presente e verificato alla fonte.
     pub fn is_ok(&self) -> bool {
         self.status == StatusDado::Ok
+    }
+}
+
+/// In output un dato assente non mostra mai un numero: mostra lo stato e il
+/// motivo. Un dato presente ma di qualita' dichiarata porta l'etichetta
+/// accanto al valore, cosi' un aggregato parziale non sembra completo.
+impl<T: fmt::Display> fmt::Display for Dado<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (&self.valor, self.status) {
+            (Some(valor), StatusDado::Ok) => write!(f, "{valor}"),
+            (Some(valor), status) => {
+                write!(
+                    f,
+                    "{valor} [{}: {}]",
+                    status.rotulo(),
+                    self.motivo.as_deref().unwrap_or("-")
+                )
+            }
+            (None, status) => write!(
+                f,
+                "{} ({})",
+                status.rotulo(),
+                self.motivo.as_deref().unwrap_or("sem motivo declarado")
+            ),
+        }
     }
 }
 
@@ -432,12 +472,22 @@ pub struct Nfe {
     pub valor_seguro: Decimal,
     pub valor_desconto: Decimal,
     pub valor_outras_despesas: Decimal,
-    pub valor_tributos_inclusos: Decimal,
+    /// Aggregato di tributi inclusi. E' un [`Dado`] perche' due componenti
+    /// (`vFCPST`, `vIPIDevol`) sono condizionali: se mancano, la somma esiste
+    /// ma e' `Parcial`, e non deve sembrare completa.
+    pub valor_tributos_inclusos: Dado<Decimal>,
     pub produtos: Vec<ProdutoNfe>,
     pub duplicatas: Vec<Duplicata>,
     pub tem_duplicatas: bool,
     pub tem_cobranca: bool,
-    pub valor_cobranca: Decimal,
+    /// Valore della fatturazione (`cobr/fat/vLiq`).
+    ///
+    /// Contratto C10: l'assenza non e' zero. Gli stati distinguono NF-e senza
+    /// `<cobr>` (non applicabile), `<cobr>` senza `<fat>` (non disponibile) e
+    /// `<fat>` senza `<vLiq>` (mancante). Uno zero vero dichiarato dalla
+    /// fonte resta zero con stato `Ok`. Il valore non viene mai ricostruito
+    /// sommando le rate.
+    pub valor_cobranca: Dado<Decimal>,
     pub arquivo_origem: String,
 }
 

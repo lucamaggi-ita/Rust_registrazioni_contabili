@@ -1,5 +1,5 @@
 [package]
-name = "rust_schede_tecniche"
+name = "rust_registrazioni_contabili"
 version = "0.1.0"
 edition = "2024"
 
@@ -10,3 +10,4 @@ quick-xml = "0.42.0"
 rust_decimal = { version = "1.43.0", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_yaml = "0.9.34"
+unicode-normalization = "0.1.25"
