@@ -50,11 +50,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write as _;
 
-use rust_decimal::{Decimal, RoundingStrategy};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::classificacao::{Classificador, ErroClassificacao};
+use crate::dinheiro::{self, ErroDinheiro};
 use crate::modelos::{
     Competencia, Confianca, Dado, Duplicata, ErroCompetencia, ErroDado, Lancamento, Nfe,
     OrigemLancamento, ProdutoNfe, ResultadoClassificacao, StatusDado, StatusRevisao,
@@ -319,34 +320,35 @@ pub struct AlocacaoNfe {
 
 /// F3A-21: arrotondamento monetario a 2 decimali, `ROUND_HALF_UP`.
 ///
-/// `Decimal::round_dp` usa "Bankers Rounding": usarlo divergerebbe dal Python,
-/// che quantizza con `ROUND_HALF_UP`. Resta per i valori che arrivano come
-/// `Decimal` e per i confronti nei test; l'aritmetica vera sta in centesimi.
+/// Delega a [`crate::dinheiro`], che e' l'unica aritmetica monetaria del crate.
 fn centavos(valor: Decimal) -> Decimal {
-    valor.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
+    dinheiro::centavos(valor)
 }
 
-/// F3A-26/D6: un importo e' nel dominio se il suo **valore** e' un multiplo
-/// esatto di 0.01. `10.0000` passa, `0.005` no: gli zeri finali non contano.
-fn no_dominio(valor: Decimal) -> bool {
-    valor.normalize().scale() <= 2
-}
-
-fn exigir_dominio(
-    valor: Decimal,
-    campo: impl Into<String>,
-    origem: &str,
-) -> Result<(), ErroAlocacao> {
-    if no_dominio(valor) {
-        return Ok(());
+/// Traduce un errore aritmetico condiviso nell'errore di questo modulo.
+///
+/// Il chiamante aggiunge l'origine del documento e, per il dominio, il nome
+/// del campo: i messaggi restano identici a prima dello spostamento degli
+/// helper in [`crate::dinheiro`].
+fn de_erro_dinheiro(erro: ErroDinheiro, campo: &str, origem: &str) -> ErroAlocacao {
+    match erro {
+        ErroDinheiro::EscalaInvalida { valor } => ErroAlocacao::EscalaMonetariaInvalida {
+            origem: origem.to_string(),
+            campo: campo.to_string(),
+            valor,
+        },
+        ErroDinheiro::CapacidadeExcedida { operacao, detalhe } => {
+            ErroAlocacao::CapacidadeNumericaExcedida {
+                origem: origem.to_string(),
+                operacao,
+                detalhe,
+            }
+        }
     }
-    Err(ErroAlocacao::EscalaMonetariaInvalida {
-        origem: origem.to_string(),
-        campo: campo.into(),
-        valor,
-    })
 }
 
+/// Errore di capacita' prodotto da questo modulo, non dagli helper condivisi
+/// (per esempio la somma degli articoli di un gruppo).
 fn capacidade(origem: &str, operacao: &'static str, detalhe: impl Into<String>) -> ErroAlocacao {
     ErroAlocacao::CapacidadeNumericaExcedida {
         origem: origem.to_string(),
@@ -355,61 +357,20 @@ fn capacidade(origem: &str, operacao: &'static str, detalhe: impl Into<String>) 
     }
 }
 
-/// Converte un importo nel suo numero **esatto** di centesimi.
-///
-/// Richiede che il valore sia nel dominio (D6). La conversione passa da
-/// mantissa e scala, senza moltiplicare in `Decimal`: moltiplicare per 100 un
-/// importo vicino al massimo rappresentabile andrebbe in overflow.
+/// Converte un importo nel suo numero **esatto** di centesimi (vedi
+/// [`crate::dinheiro::em_centesimos`]).
 fn em_centesimos(valor: Decimal, campo: &str, origem: &str) -> Result<i128, ErroAlocacao> {
-    exigir_dominio(valor, campo, origem)?;
-    let normalizado = valor.normalize();
-    let fator = 10i128.pow(2 - normalizado.scale());
-    normalizado.mantissa().checked_mul(fator).ok_or_else(|| {
-        capacidade(
-            origem,
-            "conversao em centavos",
-            format!("{campo} = {valor}"),
-        )
-    })
+    dinheiro::em_centesimos(valor, campo).map_err(|e| de_erro_dinheiro(e, campo, origem))
 }
 
-/// Riporta i centesimi a `Decimal`, o dichiara l'incapacita'.
-///
-/// Si prova prima la scala 2; se la mantissa non ci sta, si **riducono gli
-/// zeri finali** abbassando la scala, fino a 0. Riscontro R3B-01 residuo B
-/// dell'audit del 2026-10-16: imporre la scala 2 restringeva artificialmente
-/// il dominio di `Decimal`, perche' un importo intero grande e' rappresentabile
-/// a scala 0 anche quando `mantissa x 100` non ci sta piu'.
-///
-/// Nessuna cifra diversa da zero viene mai eliminata e non si arrotonda: se il
-/// centesimo non e' divisibile, il valore **non** e' rappresentabile e la
-/// funzione restituisce l'errore.
+/// Riporta i centesimi a `Decimal`, o dichiara l'incapacita' (vedi
+/// [`crate::dinheiro::de_centesimos`]).
 fn de_centesimos(
     centesimos: i128,
     operacao: &'static str,
     origem: &str,
 ) -> Result<Decimal, ErroAlocacao> {
-    let mut mantissa = centesimos;
-    let mut escala: u32 = 2;
-    loop {
-        if let Ok(valor) = Decimal::try_from_i128_with_scale(mantissa, escala) {
-            return Ok(valor);
-        }
-        // Solo zeri finali: il valore resta identico.
-        if escala == 0 || mantissa % 10 != 0 {
-            break;
-        }
-        mantissa /= 10;
-        escala -= 1;
-    }
-    Err(capacidade(
-        origem,
-        operacao,
-        format!(
-            "{centesimos} centavos nao sao representaveis em Decimal nem reduzindo \
-             zeros finais, e nenhum centavo pode ser descartado"
-        ),
-    ))
+    dinheiro::de_centesimos(centesimos, operacao).map_err(|e| de_erro_dinheiro(e, operacao, origem))
 }
 
 fn somar_centesimos(
@@ -417,64 +378,18 @@ fn somar_centesimos(
     operacao: &'static str,
     origem: &str,
 ) -> Result<i128, ErroAlocacao> {
-    let mut acumulado: i128 = 0;
-    for valor in valores {
-        acumulado = acumulado
-            .checked_add(valor)
-            .ok_or_else(|| capacidade(origem, operacao, format!("{acumulado} + {valor}")))?;
-    }
-    Ok(acumulado)
+    dinheiro::somar_centesimos(valores, operacao).map_err(|e| de_erro_dinheiro(e, operacao, origem))
 }
 
-/// Divisione intera con arrotondamento `ROUND_HALF_UP` (meta' lontano da zero).
-///
-/// Il resto decide: nessun passaggio in virgola mobile, nessun raddoppio del
-/// numeratore che potrebbe eccedere `i128`.
-///
-/// Divisione e resto passano per `checked_div`/`checked_rem`: riscontro R3B-01
-/// residuo A dell'audit del 2026-10-16, `i128::MIN / -1` non e' rappresentabile
-/// e con gli operatori ordinari andava in **panico**. L'incapacita' numerica
-/// deve essere un errore tipizzato, mai un panico.
+/// Divisione intera con arrotondamento `ROUND_HALF_UP` (vedi
+/// [`crate::dinheiro::dividir_meio_para_cima`]).
 fn dividir_meio_para_cima(
     numerador: i128,
     denominador: i128,
     origem: &str,
 ) -> Result<i128, ErroAlocacao> {
-    if denominador == 0 {
-        return Err(capacidade(
-            origem,
-            "divisao do rateio",
-            "denominador zero nao chega a esta funcao",
-        ));
-    }
-    let excedido = || {
-        capacidade(
-            origem,
-            "divisao do rateio",
-            format!("{numerador} / {denominador} nao e' representavel em i128"),
-        )
-    };
-    let quociente = numerador.checked_div(denominador).ok_or_else(excedido)?;
-    let resto = numerador.checked_rem(denominador).ok_or_else(excedido)?;
-    if resto == 0 {
-        return Ok(quociente);
-    }
-    let dobro_do_resto = resto
-        .checked_abs()
-        .and_then(|r| r.checked_mul(2))
-        .ok_or_else(|| capacidade(origem, "divisao do rateio", format!("resto {resto}")))?;
-    if dobro_do_resto < denominador.abs() {
-        return Ok(quociente);
-    }
-    let positivo = (numerador >= 0) == (denominador >= 0);
-    let ajuste = if positivo { 1 } else { -1 };
-    quociente.checked_add(ajuste).ok_or_else(|| {
-        capacidade(
-            origem,
-            "divisao do rateio",
-            format!("{quociente} + {ajuste}"),
-        )
-    })
+    dinheiro::dividir_meio_para_cima(numerador, denominador)
+        .map_err(|e| de_erro_dinheiro(e, "divisao do rateio", origem))
 }
 
 fn aviso(codigo: &str, detalhe: impl Into<String>) -> Aviso {

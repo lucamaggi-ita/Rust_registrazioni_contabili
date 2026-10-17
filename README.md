@@ -17,7 +17,11 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 | 2 | Leitura de NF-e (`quick-xml`), normalizacao de texto, classificacao produtos/despesas | **PRONTA** (revisoes 2026-10-15 e 2026-10-16 aplicadas; C17 fechado com audit independente) |
 | 3A | Analise e especificacao da alocacao (contratos, formulas, casos numericos) | **PRONTA** (`SPECIFICA_FASE3A_REGISTRAZIONI.md`, audit tecnico superado) |
 | 3B | Alocacao de NF-e em lancamentos com reconciliacao (`alocacao.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-16 (R3B-01/02/03 fechados); aguarda apenas o registro em Git autorizado |
-| 3C | Pre-livro diario, revisao, exportacao | NAO_INICIADA |
+| 3C.1 | Analise e especificacao de pre-livro, revisao e exportacao | **PRONTA** (`SPECIFICA_FASE3C_PRELIBRO_REVISIONE_EXPORT.md`, revisao 2.1) |
+| 3C.2 | Pre-livro em memoria: particoes, resumos, invariantes (`prelivro.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-17 (R3C2-01/02/03 fechados); aguarda apenas o registro em Git autorizado |
+| 3C.3 | Estados e revisao humana: transicoes, rastreamento | NAO_INICIADA |
+| 3C.4 | Adaptadores de entrada bruta, arquivo autoritativo, exportacao | NAO_INICIADA |
+| 3C.5 | Uso pela CLI | NAO_INICIADA |
 | 3D | DRE gerencial por competencia | NAO_INICIADA |
 
 Funciona de ponta a ponta: validar a configuracao, ler uma NF-e em XML,
@@ -130,6 +134,39 @@ linha DRE e o centro de custo ficam declarados em
 `Reconciliacao::campi_rinviati` com estado, fonte e motivo, em vez de serem
 strings vazias silenciosas (F3A-17/18/19).
 
+### Fase 3C.2 - pre-livro em memoria
+
+Implementado em `prelivro.rs` em 2026-10-17; **audit tecnico independente superado** no mesmo dia, depois da correcao de R3C2-01/02/03:
+os contratos conservam os identificadores de analise `F3C-nn` da especificacao
+e **nao** recebem numeracao `C25+`, porque a fase 3C tem cinco blocos e so dois
+estao fechados: uma numeracao definitiva de fase incompleta seria prematura. As
+decisoes de dominio **D10(a)** e **D13(a)** foram aprovadas por Luca em
+2026-10-17; D7, D8, D9, D11 e D12 seguem abertas para os blocos seguintes.
+
+| ID | Contrato | Onde | Teste |
+|---|---|---|---|
+| F3C-01 | A entrada e' `AlocacaoNfe` + contexto tipado, nunca um workbook; `construir_pre_livro` e' **pura** | `prelivro.rs` | `t01_campione_canonico_*` |
+| F3C-01b | **Contexto e alocacao tem de falar do mesmo documento**: chave, numero, data, competencia e CNPJ da empresa sao comparados antes de agregar; divergencia = erro nomeado, nenhuma linha reescrita | `prelivro.rs` | `r1_chave_discordante_*`, `r1_empresa_discordante_*`, `r1_competencia_discordante_*`, `r1_contexto_coerente_*` |
+| F3C-02/07 | **Toda linha recebida cai em exatamente uma particao**; nenhum descarte implicito (I1, I2) | `prelivro.rs` | `t15_conservacao_e_contagens_fecham` |
+| F3C-03 | Particao com precedencia declarada e **todas as causas** conservadas em `motivos` | `prelivro.rs` | `t14_particao_unica_com_mais_de_um_motivo` |
+| F3C-08 | Resumos por `(cnpj_empresa, competencia, conta_id)`; empresa nao identificada em particao propria, **nunca** fundida (D13) | `prelivro.rs` | `t10_duas_empresas_*`, `t11_empresa_nao_identificada_*` |
+| F3C-09 | Nome da conta vem do **`PlanoContas` recebido como parametro**; nomes de linha divergentes conservados e sinalizados; conta fora do plano = erro nomeado | `prelivro.rs` | `t12_nome_do_conto_*`, `t22_*`, `t23_*` |
+| F3C-11 | Diagnostico e resumos conservam tudo, **marcado**: cada resumo diz de quantos documentos `OK`/`PARCIAL`/`ERRO` vem e nomeia os nao `OK`; extrato aprovado so com linhas `APROVADO` de documentos nao `ERRO`; **cada exclusao e' listada** com identidade, valor, estado e motivo (D10) | `prelivro.rs` | `t05_documento_erro_*`, `t18_exclusoes_*`, `r2_resumo_marca_*`, `r2_problema_de_um_grupo_*` |
+| F3C-12 | A `Reconciliacao` do documento e' conservada **integra**, nao achatada em colunas de linha | `prelivro.rs` | `t09_reconciliacao_*` |
+| F3C-25 | Ordenacao deterministica: permutar a entrada nao muda o resultado, **nem nos conteineres agregados** (avisos e nomes divergentes tem ordem canonica) nem nos metadados do lote (I7) | `prelivro.rs` | `t19_permutar_a_ordem_*`, `r3_permutacao_com_avisos_*`, `r3_metadados_do_lote_*` |
+| F3C-26 | **Somas em centavos inteiros**, com os helpers compartilhados de `dinheiro.rs`; agregado nao representavel = erro, nunca truncamento nem pre-livro parcial | `dinheiro.rs`, `prelivro.rs` | `t16_somas_por_chave_*`, `t21_soma_de_varios_documentos_*` |
+| F3C-27 | Cada documento do lote aparece **mesmo sem linhas**, com chave, empresa, competencia e estado (I8) | `prelivro.rs` | `t06_documento_sem_linhas_*` |
+
+**`dinheiro.rs`: uma so aritmetica monetaria no crate.** Os helpers de centavos
+da fase 3B foram movidos para um modulo interno compartilhado, sem duplicacao e
+**sem mudanca de comportamento**: os testes da 3B continuam identicos e verdes.
+Era o pre-requisito do bloco, porque somar `Decimal` entre documentos
+individualmente validos pode perder um centavo em silencio.
+
+Fora deste bloco, por contrato: entradas brutas (`INCOMPLETO`,
+`NAO_RECONHECIDO`), arquivo autoritativo, exportacao, import do historico, CLI
+e transicoes de revisao humana.
+
 O Python so le `regras` e `conta_fallback_id`. C13 torna visivel o resto:
 
 - `regras_por_fornecedor` (1 regra: fornecedor com descricao generica "KILOS")
@@ -231,7 +268,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-166 testes: 150 de unidade na lib, 3 no binario, 13 de integracao de CLI.
+208 testes: 192 de unidade na lib, 3 no binario, 13 de integracao de CLI.
 
 Testes que amarram o codigo aos dados reais, nao a fixtures:
 

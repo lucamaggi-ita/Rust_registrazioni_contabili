@@ -13,7 +13,9 @@
 
 pub mod alocacao;
 pub mod classificacao;
+pub(crate) mod dinheiro;
 pub mod modelos;
 pub mod nfe;
 pub mod normalizacao;
+pub mod prelivro;
 pub mod regras;
