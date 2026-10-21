@@ -8,7 +8,7 @@
 | Revisione 4 | correzione del secondo residuo di `R3C3-01` (`C4`, più `C5` e `C2` per la stessa causa): la codifica esatta dell'evento ha ora produzioni proprie che non perdono né il `motivo` dei `Dado` né la forma Unicode originale, §5.4.2 e §11 |
 | Mandato | `MANDATO_CLAUDE_FASE3C3_REVISIONE_SPECIFICA_20261017.md` |
 | Perimetro | **analisi e scrittura di specifica**. Nessuna riga di Rust, nessuna modifica di `Cargo.*`, nessun writer, archivio, CLI, export, import o produzione |
-| Stato | **AUDIT TECNICO SUPERATO** il 2026-10-21. La fase 3C.3 **non** è implementata e **non** è chiusa come fase software |
+| Stato | Specifica: **AUDIT TECNICO SUPERATO** il 2026-10-21. Lotto `3C.3.a`: **implementato e in attesa di audit** (§13), con i riscontri `R3C3A-01/02/03` corretti (§13.6). La fase 3C.3 **non** è chiusa come fase software: manca 3C.3.b, e la 3C nel suo insieme richiede 3C.4 e 3C.5 |
 | HEAD alla stesura | `37c0e039c3c9366d505dac07e0bf7a2d97661575` |
 | Decisioni | **D8.1–D8.5 e D9.1–D9.5 approvate da Luca il 2026-10-21**, tutte nell'opzione (a): §12. D10(a) e D13(a) restano approvate e non vengono riaperte. D7, D11 e D12 restano rinviate |
 | Metodo | `programmatore-bravo`: prima contrattualizza, poi programma |
@@ -1823,3 +1823,224 @@ Preparare il mandato implementativo del lotto **3C.3.a** nel perimetro di §5,
 tenendo fuori persistenza, archivio, esportazione, import, CLI e fasi
 successive. L'implementazione, i suoi commit e il suo push restano da
 autorizzare separatamente.
+
+---
+
+## 13. Esito dell'implementazione del lotto 3C.3.a (2026-10-21)
+
+Appendice di **esecuzione**: non cambia nessuna decisione, nessun vettore e
+nessun contratto di questo documento. Le decisioni di §12 restano quelle, e i
+contratti restano `PROPOSTO` fino all'audit di questo lotto.
+
+### 13.1 File scritti
+
+| File | Intervento | Righe |
+|---|---|---|
+| `src/impressao.rs` | **nuovo**: testi canonici e impronte di contenuto e presentazione | 1.111 |
+| `src/revisao.rs` | **nuovo**: eventi, codifica esatta, ordine canonico, validazione, proiezione, vista | 2.859 |
+| `src/lib.rs` | due righe: `pub mod impressao;`, `pub mod revisao;` | +2 |
+| `README.md` | stato reale, contratti coperti, superficie pubblica, limiti, conteggio dei test | — |
+
+**Non toccati**, come da mandato: `prelivro.rs`, `alocacao.rs`, `dinheiro.rs`,
+`modelos.rs`, `nfe.rs`, `regras.rs`, `main.rs`, `classificacao.rs`,
+`normalizacao.rs`, i test preesistenti, `Cargo.toml`, `Cargo.lock`, `config/*`,
+`samples/*`. Verificato con `git status --porcelain` su ciascuno: nessuna
+modifica. Nessun file di integrazione sotto `tests/` e' stato aggiunto: i test
+interni ai due moduli coprono i contratti attraverso le funzioni pubbliche, e
+un file in piu' non avrebbe verificato niente di nuovo.
+
+### 13.2 Scelte tecniche, dentro i contratti approvati
+
+Nessuna di queste cambia una regola: sono modi di realizzarla.
+
+| Scelta | Perche' |
+|---|---|
+| `ChaveCanonica` e' una **struct** con `Ord` derivato, non una stringa unica | il confronto resta ordinale sui byte UTF-8, perche' le `String` di Rust si confrontano cosi', ma diventa verificabile campo per campo, e `Option<String>` da' gia' "assente prima di presente". La specifica dichiarava la firma come indicativa |
+| `impressao::dado` serve il livello **semantico** della chiave; `dado_esatto_string` serve il livello 6 | una sola implementazione per ciascuna delle due produzioni, nessun codec duplicato |
+| `aplicar_revisao` chiama `construir_pre_livro` **sugli originali** e poi, solo se una decisione cambia uno stato, **sulla copia proiettata** | la prima chiamata e' anche la validazione dell'ingresso: un abbinamento non puo' rendere valido cio' che la 3C.2 rifiuta. Senza decisioni applicate la vista riusa il pre-libro originale, quindi "nessuna decisione" non costa una seconda costruzione |
+| gli errori portano `Box<ChaveEvento>` | tiene piccolo l'enum d'errore: senza il box `clippy::result_large_err` segnalava un `Result` sbilanciato. La diagnostica resta identica |
+| `instante_exato` usa `to_rfc3339_opts(Nanos, false)` | larghezza fissa e offset dichiarato conservato: nessun ramo che dipenda dal valore |
+| la traccia globale si ottiene ordinando le decisioni di riga con la stessa chiave | una sola regola d'ordine, come dichiarato in §5.4.2: le collezioni di riga sono sottosequenze, non una seconda regola |
+
+### 13.3 Mappa dei test pianificati
+
+59 test nuovi: **17** in `impressao.rs`, **42** in `revisao.rs`, dei quali sei
+sono le regressioni dei riscontri dell'audit del lotto (§13.6). Dove un test
+copre piu' casi della matrice, e' nominato una volta sola.
+
+| Caso di §7 | Test |
+|---|---|
+| T3-01 | `t3_01_aprovacao_explicita_de_linha_ok`, `t3_01_sem_eventos_nenhuma_linha_e_aprovada` |
+| T3-02 | `t3_02_aprovar_nao_apaga_avisos_nem_esitos` |
+| T3-03 | `t3_03_projecao_muda_so_o_status_revisao` |
+| T3-04 | `t3_04_revogacao_restaura_o_estado_tecnico_e_conserva_a_trilha`, `t3_04_revogacao_de_linha_revisar_volta_a_revisar` |
+| T3-05 | `t3_05_eventos_malformados_sao_erros_nomeados` (cinque casi) |
+| T3-06 | `t3_06_alvo_ausente_nao_toca_nenhuma_linha`, `t3_06_revogar_sem_aprovacao_nao_se_aplica`, `t3_06_proveniencia_ausente_nao_e_revisao_verificada` |
+| T3-07 | `t3_07_duas_linhas_com_o_mesmo_hash_sao_alvos_distintos` |
+| T3-08 | `t3_08_correcao_a_chave_e_total_invariados_muda_a_impressao` (vettore J), `t3_08_versao_superada_nao_herda_a_decisao` |
+| T3-09 | `t3_09_apresentacao_separa_nome_do_plano_do_conteudo` (vettori K/L), `t3_09_texto_de_apresentacao_e_estavel`, `apresentacao_mudada_e_sinalizada_e_as_decisoes_permanecem` |
+| T3-10 | `t3_10_mesmo_conteudo_em_outro_lote_reencontra_o_alvo` |
+| T3-11 | `t3_11_permutacao_dos_documentos_e_indiferente`, `t3_25_permutacao_dos_avisos_de_leitura_e_indiferente` |
+| T3-11b | `t3_11b_permutacao_dos_artigos_e_um_caso_distinto` |
+| T3-12 | `t3_12_forma_canonica_dos_monetarios`, `t3_12_impressoes_dos_vetores_a_f`, `t3_12_vetor_i_byte_a_byte_e_impressao` |
+| T3-12b | `t3_12b_ausencia_difere_de_zero_real`, `t3_12b_prefixo_de_comprimento_separa_campos`, `t3_12b_separadores_e_lf_nos_textos_nao_quebram_a_codificacao` |
+| T3-13 | `t3_13_impressao_invariante_a_ambiente_lote_e_campos_humanos`, `t3_13_impressao_invariante_a_forma_unicode`, `t3_13_n1_normalizar_antes_de_ordenar` |
+| T3-14 | `t3_14_repeticao_exata_nao_e_aplicada_duas_vezes`, `t3_14_decisoes_incompativeis_no_mesmo_instante_sao_conflito` (quattro combinazioni), `t3_14_eventos_contemporaneos_em_linhas_diferentes_nao_sao_conflito` |
+| T3-15 | `t3_15_anotacao_conservada_e_aprovacao_nao_muda_a_impressao` |
+| T3-16 | `t3_16_documento_sem_linhas_e_aprovado_sem_proveniencia`, `t3_16_sanatoria_explicita_de_aprovado_sem_proveniencia` |
+| T3-17 | `t3_17_duas_anotacoes_no_mesmo_instante_sem_sequencia` |
+| T3-18 | `t3_18_um_evento_malformado_impede_toda_a_vista` |
+| T3-19 | `t3_19_aprovacao_em_documento_erro_e_registrada_mas_nao_entra` |
+| T3-20 | `t3_20_empate_canonico_conserva_os_dois_avisos` |
+| T3-21 | `t3_21_erro_escolhido_em_ordem_canonica_nao_por_posicao` |
+| T3-22 | `t3_22_c1_alvos_distintos_nao_sao_repeticao`, `t3_22_c2_c3_c4_c5_sao_declaracoes_distintas`, `t3_22_codificacao_exata_e_injetiva_nos_campos_declarados` (dodici campi), `texto_exato_nao_normaliza_e_conserva_o_offset` |
+| R3C3A-01 | `r1_revogacao_da_sanatoria_tira_a_linha_do_extrato_revisado`, `r1_revogacao_de_linha_ok_continua_fora_do_extrato` |
+| R3C3A-02 | `r2_offset_declarado_com_segundos_nao_e_repeticao`, `r2_nanossegundos_e_repeticao_exata_continuam_corretos` |
+| R3C3A-03 | `r3_escolha_do_conflito_nao_depende_da_ordem_dos_documentos`, `r3_conflito_estavel_permutando_eventos_e_documentos` |
+| aggiunti | `etiquetas_dos_enums_sao_estaveis`, `contas_mostradas_vem_do_plano_e_sao_ordenadas`, `conta_fora_do_plano_e_erro_nomeado`, `avisos_da_vista_ficam_em_ordem_canonica`, `aprovacao_repetida_com_declaracoes_diferentes_avisa_e_conserva`, `erro_do_pre_livro_e_propagado_sem_reescrita`, `conta_fora_do_plano_e_rejeitada`, `lote_vazio_produz_vista_vazia_sem_inventar_identidade`, `alvo_ambiguo_e_interceptado_antes_pela_validacao_da_3c2` |
+
+I vettori normativi vivono in attese **scritte a mano**, copiate da §4.8, non
+rigenerate dal codice sotto test. Il testo del vettore I e' un letterale con
+`\n` espliciti: un checkout con `CRLF` non lo altera, e i test non dipendono da
+Git ne' dal sistema operativo a runtime.
+
+### 13.4 Verifiche eseguite
+
+| Comando | Esito |
+|---|---|
+| `cargo test --locked` | **267 test passati**: 251 di unita' nella lib, 3 nel binario, 13 di integrazione CLI. I 208 preesistenti restano verdi **senza modifiche** |
+| `cargo fmt --check` | pulito |
+| `cargo clippy --locked --all-targets -- -D warnings` | pulito, **nessuna soppressione**: `unnecessary_sort_by`, `collapsible_if`, `ptr_arg`, `cloned_ref_to_slice_refs` e `result_large_err` sono stati corretti nel codice |
+| `git diff --check` | pulito |
+| sei fonti canoniche | **6/6 invariate** (`git status --porcelain config samples` vuoto) |
+| file esclusi dal mandato | nessuna modifica, verificato uno per uno |
+
+I vettori sono ora riprodotti dal **codice Rust**, non solo dalla sonda: il
+vettore I da' **948 byte** e `f8a6e8d0…14c`, J **952 byte** e `4ce5f31b…7a7`, K
+e L le impronte di presentazione pubblicate, A–H i frammenti con le loro
+lunghezze. La grammatica di §4.4 si e' rivelata implementabile **cosi' com'era
+scritta**: nessuna sua regola e' stata cambiata per far tornare un hash.
+
+### 13.5 Differenze rispetto al mandato, e limiti residui
+
+| Punto | Stato |
+|---|---|
+| `AlvoAmbiguo` | **non raggiungibile** dall'API: due righe con la stessa `(chave, impressao, origem, conta, ordinal)` richiederebbero due documenti con la stessa chiave, che `construir_pre_livro` rifiuta prima con `DocumentoDuplicadoNoLote`. Il ramo resta nel tipo, e il test `alvo_ambiguo_e_interceptado_antes_pela_validacao_da_3c2` registra **quale** controllo intercetta il caso, invece di forzare un tipo incoerente. Limite dichiarato, come fu per `ModeloIncoerente` in 3B |
+| copertura dell'iniettivita' | `t3_22_codificacao_exata_e_injetiva_nos_campos_declarados` varia **dodici** campi dichiarati uno per uno, non tutte le combinazioni: la garanzia per i campi **futuri** resta l'obbligo contrattuale F3C-46, non un test |
+| persistenza | assente per contratto: e' 3C.3.b e dipende da D7 |
+| `APRESENTACAO_MUDADA` | si attiva confrontando la `vista` **dichiarata nell'evento** con l'impronta di presentazione corrente. Un evento che non dichiara la vista (`Dado` assente) non produce nessuna affermazione: assenza dichiarata, non silenzio |
+| nessun `f32`/`f64`, nessuna nuova aritmetica monetaria, nessun orologio o IO nei moduli puri | verificato: i due moduli non importano `std::fs`, `std::time` ne' `dinheiro` |
+
+**La fase 3C.3 non e' chiusa**: questo e' il lotto `3C.3.a`, consegnato per
+audit, e la 3C nel suo insieme richiede ancora 3C.4 e 3C.5. Nessuna promozione
+in produzione contabile, nessun commit e nessun push.
+
+### 13.6 Correzione dei riscontri dell'audit del lotto (2026-10-21)
+
+L'audit indipendente del lotto ha trovato **tre** difetti, tutti riprodotti
+attraverso l'API pubblica e tutti in combinazioni che i 53 test della prima
+consegna non coprivano. Accolti e corretti. Le sei regressioni sono state
+scritte **prima** della correzione, con le attese corrette: sono fallite, poi
+sono passate.
+
+#### R3C3A-01 — la revoca poteva lasciare la riga nell'estratto revisionato
+
+Il filtro escludeva soltanto lo stato corrente `APROVADO_SEM_PROVENIENCIA`.
+Partendo da una riga che arriva `APROVADO` senza evento — ingresso ammesso da
+D9.4 — dopo la sanatoria esplicita e la sua **revoca** lo stato diventa
+`APROVACAO_REVOGADA`, quindi non era piu' quello escluso; e la proiezione
+ripristina lo stato tecnico, che in quel caso e' proprio `APROVADO`. Risultato:
+una riga nell'estratto revisionato **senza nessuna approvazione attiva**.
+
+| Intervento | Dove |
+|---|---|
+| l'inclusione richiede ora un'**approvazione umana attiva**: `estado == AprovadoPorPessoa`, oltre al filtro tecnico D10(a) gia' applicato dalla 3C.2 | `revisao.rs`, assemblaggio della vista |
+| l'esclusione porta un motivo **distinto per stato**: provenienza assente contro approvazione revocata | idem |
+| dato originale, stato tecnico, decisioni e riconciliazione restano invariati; nessun `OK` o `REVISAR` inventato come stato della fonte | invariato |
+| la riga **rientra** se l'approvazione torna attiva: testato con il ri-`Aprovar` | `r1_revogacao_da_sanatoria_tira_a_linha_do_extrato_revisado` |
+
+Regressioni: `r1_revogacao_da_sanatoria_tira_a_linha_do_extrato_revisado` (tre
+fasi: senza eventi, sanatoria+revoca, ri-approvazione) e
+`r1_revogacao_de_linha_ok_continua_fora_do_extrato` come controllo ordinario.
+
+#### R3C3A-02 — il testo esatto perdeva i secondi dell'offset
+
+`EventoRevisao::instante` e' un `DateTime<FixedOffset>`, e `FixedOffset`
+ammette offset con i **secondi**. `to_rfc3339_opts(SecondsFormat::Nanos, false)`
+rappresenta l'offset ai **minuti**: `Nanos` riguarda la frazione dell'orario,
+non la precisione dell'offset. Due approvazioni con offset dichiarati di 1 e 2
+secondi davano lo stesso testo esatto — entrambe `+00:00` — e la seconda
+diventava una falsa `Repeticao`: una dichiarazione reale perduta. Non era una
+collisione SHA-256, era una codifica **non iniettiva** di un valore che il tipo
+pubblico rappresenta.
+
+**Completamento tecnico della grammatica** (non una nuova decisione): la
+produzione `EIN` di `EVENTO-EXATO/v1` scrive l'orario **locale** con i
+nanosecondi, poi il separatore `OFF`, poi l'offset come **numero intero di
+secondi** rispetto a UTC:
+
+```text
+EIN=38:2026-10-21T12:00:00.000000000OFF-10800
+```
+
+Orario locale piu' offset in secondi determinano univocamente il
+`DateTime<FixedOffset>`, quindi la codifica resta iniettiva su tutto il dominio
+del tipo. Nessun filtro di dominio e' stato introdotto: rifiutare gli offset
+con secondi per evitare il controesempio sarebbe stato un vincolo non
+approvato. L'impronta **tecnica del contenuto** e i dati degli eventi restano
+invariati: `EIN` vive solo nella codifica esatta dell'evento.
+
+Regressioni: `r2_offset_declarado_com_segundos_nao_e_repeticao` e
+`r2_nanossegundos_e_repeticao_exata_continuam_corretos`. Il test
+`texto_exato_nao_normaliza_e_conserva_o_offset` e' stato aggiornato alla forma
+corretta: la sua vecchia attesa (`-03:00`) descriveva il difetto.
+
+#### R3C3A-03 — la scelta del conflitto dipendeva dall'ordine dei documenti
+
+Il controllo attraversava `estados.values()`, ordinato per `PosicaoLinha`, che
+contiene l'**indice del documento ricevuto**, e restituiva il primo conflitto
+trovato. Con due documenti, ciascuno con un proprio conflitto, permutare
+l'array dei documenti cambiava quale conflitto veniva nominato — esattamente
+dove F3C-44 esclude la posizione d'ingresso. Le singole coppie erano
+riconosciute correttamente e nessuna vista parziale veniva prodotta: il difetto
+era la **selezione** del fallimento.
+
+| Intervento | Dove |
+|---|---|
+| `verificar_conflitos` diventa `conflitos_do_alvo`: restituisce **tutte** le coppie in conflitto di un bersaglio, invece di fermarsi alla prima | `revisao.rs` |
+| il chiamante raccoglie i conflitti di tutti i bersagli e li ordina con la **chiave canonica degli eventi**, poi riporta il primo | `revisao.rs`, passata 2b |
+| nessuna modifica a `prelivro.rs` ne' ai contratti della 3C.2 | invariato |
+
+Regressioni: `r3_escolha_do_conflito_nao_depende_da_ordem_dos_documentos`, che
+verifica anche **quale** conflitto viene scelto — il piu' antico in ordine
+canonico — e `r3_conflito_estavel_permutando_eventos_e_documentos`, che permuta
+eventi e documenti insieme.
+
+#### Verifiche dopo le correzioni
+
+| Comando | Esito |
+|---|---|
+| `cargo test --locked` | **267 test passati**: 251 lib, 3 binario, 13 CLI. 59 nuovi (17 `impressao`, 42 `revisao`); i 208 preesistenti verdi senza modifiche |
+| `cargo fmt --check` | pulito |
+| `cargo clippy --locked --all-targets -- -D warnings` | pulito, nessuna soppressione |
+| `git diff --check` | pulito |
+| sei fonti canoniche | 6/6 invariate |
+| file esclusi dal mandato | nessuna modifica |
+| vettori normativi | invariati: I 948 byte e `f8a6e8d0…14c`, J 952 byte, K/L, A–H. Le correzioni non toccano l'impronta del contenuto contabile |
+
+Nota sugli avvisi d'ambiente: `rustc` puo' segnalare il fallimento degli hard
+link della cache incrementale, e Git segnala la futura conversione LF/CRLF dei
+tracked modificati. I comandi terminano con esito 0 e nessun avviso e' stato
+nascosto o silenziato: "pulito" qui significa **nessun rilievo di `fmt`,
+`clippy` o `diff --check`**, non assenza di messaggi d'ambiente.
+
+#### Stato dei riscontri del lotto
+
+| Riscontro | Stato |
+|---|---|
+| R3C3A-01 estratto revisionato senza approvazione attiva | **CORRETTO**, due regressioni permanenti |
+| R3C3A-02 offset con secondi perduto nella codifica esatta | **CORRETTO**, due regressioni, grammatica `EIN` completata e dichiarata qui |
+| R3C3A-03 scelta del conflitto dipendente dall'ordine dei documenti | **CORRETTO**, due regressioni permanenti |
+
+Il lotto resta **consegnato per audit**, non chiuso: la conferma delle
+correzioni spetta all'audit successivo, e nessun commit o push e' autorizzato.
