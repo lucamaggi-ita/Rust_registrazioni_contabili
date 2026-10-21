@@ -18,8 +18,10 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 | 3A | Analise e especificacao da alocacao (contratos, formulas, casos numericos) | **PRONTA** (`SPECIFICA_FASE3A_REGISTRAZIONI.md`, audit tecnico superado) |
 | 3B | Alocacao de NF-e em lancamentos com reconciliacao (`alocacao.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-16 (R3B-01/02/03 fechados); aguarda apenas o registro em Git autorizado |
 | 3C.1 | Analise e especificacao de pre-livro, revisao e exportacao | **PRONTA** (`SPECIFICA_FASE3C_PRELIBRO_REVISIONE_EXPORT.md`, revisao 2.1) |
-| 3C.2 | Pre-livro em memoria: particoes, resumos, invariantes (`prelivro.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-17 (R3C2-01/02/03 fechados); aguarda apenas o registro em Git autorizado |
-| 3C.3 | Estados e revisao humana: transicoes, rastreamento | NAO_INICIADA |
+| 3C.2 | Pre-livro em memoria: particoes, resumos, invariantes (`prelivro.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-17 (R3C2-01/02/03 fechados), registrada e publicada |
+| 3C.3 — especificacao | Revisao humana, versoes e impressao canonica | **PRONTA** (`SPECIFICA_FASE3C3_REVISIONE_VERSIONI.md`, revisao 4): audit tecnico superado em 2026-10-21; as dez subescolhas D8.1–D8.5 e D9.1–D9.5 foram **aprovadas** na opcao (a) |
+| 3C.3.a | Impressoes canonicas (`impressao.rs`) e revisao pura em memoria (`revisao.rs`) | **IMPLEMENTADA, EM ESPERA DE AUDIT** (2026-10-21) |
+| 3C.3.b | Persistencia dos eventos e do historico de revisao | NAO_INICIADA: depende de D7 |
 | 3C.4 | Adaptadores de entrada bruta, arquivo autoritativo, exportacao | NAO_INICIADA |
 | 3C.5 | Uso pela CLI | NAO_INICIADA |
 | 3D | DRE gerencial por competencia | NAO_INICIADA |
@@ -27,8 +29,10 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 Funciona de ponta a ponta: validar a configuracao, ler uma NF-e em XML,
 classificar cada item contra o plano de contas e **alocar o documento em
 lancamentos com reconciliacao**. A fase 3B **nao grava nada**: `alocar_nfe` e'
-uma funcao pura que devolve os lancamentos em memoria. Gravar, revisar e
-exportar e' 3C; agregar a DRE e' 3D.
+uma funcao pura que devolve os lancamentos em memoria. A 3C.2 agrega esses
+lancamentos num pre-livro, e a 3C.3.a registra **decisoes humanas declaradas**
+sobre ele — tambem em memoria. **Gravar** continua sendo 3C.4; agregar a DRE
+e' 3D.
 
 ## Uso
 
@@ -157,6 +161,68 @@ decisoes de dominio **D10(a)** e **D13(a)** foram aprovadas por Luca em
 | F3C-26 | **Somas em centavos inteiros**, com os helpers compartilhados de `dinheiro.rs`; agregado nao representavel = erro, nunca truncamento nem pre-livro parcial | `dinheiro.rs`, `prelivro.rs` | `t16_somas_por_chave_*`, `t21_soma_de_varios_documentos_*` |
 | F3C-27 | Cada documento do lote aparece **mesmo sem linhas**, com chave, empresa, competencia e estado (I8) | `prelivro.rs` | `t06_documento_sem_linhas_*` |
 
+### Fase 3C.3.a - impressoes canonicas e revisao humana em memoria
+
+Dois modulos novos, ambos **puros**: nenhum relogio, nenhum usuario de sistema
+operacional, nenhum acesso ao disco, nenhum historico persistente.
+
+| Contrato | Regra | Codigo | Teste |
+|---|---|---|---|
+| F3C-04 | Nenhuma promocao automatica a `APROVADO`: so um evento declarado aprova | `revisao.rs` | `t3_01_*`, `t3_01_sem_eventos_*` |
+| F3C-05 | Aprovar **nao** apaga avisos nem muda os quatro esitos tecnicos | `revisao.rs` | `t3_02_aprovar_nao_apaga_*` |
+| F3C-13 | A decisao se liga ao **conteudo examinado** (`ChaveRevisao` sem lote); `IdentidadeLinha` com lote conserva a proveniencia da execucao | `revisao.rs` | `t3_10_mesmo_conteudo_em_outro_lote_*`, `t3_07_*` |
+| F3C-22 | Decisoes e anotacoes se reaplicam numa regeneracao de conteudo identico | `revisao.rs` | `t3_10_*`, `t3_15_*` |
+| F3C-23 | Revogar e repetir **nao apagam** nada da trilha | `revisao.rs` | `t3_04_revogacao_*`, `t3_14_repeticao_*` |
+| F3C-28 | Autor, instante e motivo vem do chamador; nenhum default, relogio ou usuario do sistema | `revisao.rs` | `t3_05_eventos_malformados_*` |
+| F3C-29 | Esito tecnico, decisao humana e estado da vista ficam em tres campos distintos | `revisao.rs` | `t3_01_*`, `t3_02_*` |
+| F3C-30 | A projecao escreve **um so** campo (`status_revisao`); os outros 25 de `Lancamento` ficam identicos | `revisao.rs` | `t3_03_projecao_muda_so_*` |
+| F3C-31 | Revogar e' um evento novo; a aprovacao anterior permanece e o estado **tecnico** e' restaurado (D9.3) | `revisao.rs` | `t3_04_*` (dois testes) |
+| F3C-32 | Evento malformado = erro que nomeia o campo e o evento, nunca a posicao no array | `revisao.rs` | `t3_05_*`, `t3_21_*` |
+| F3C-33 | Versao superada ou alvo ausente: **nao** se aplica a outra linha, e o evento fica consultavel | `revisao.rs` | `t3_06_*` (tres testes), `t3_08_*` |
+| F3C-34 | `IMPRESSAO-CONTEUDO/v1`: texto canonico declarado, prefixos de comprimento, SHA-256 hexadecimal minusculo | `impressao.rs` | `t3_12_vetor_i_byte_a_byte_*` |
+| F3C-35 | Duas linhas com o mesmo `hash_registro` (C23) continuam alvos distintos | `revisao.rs` | `t3_07_duas_linhas_com_o_mesmo_hash_*` |
+| F3C-36 | Correcao com chave, conta e total invariados muda a impressao | `impressao.rs`, `revisao.rs` | `t3_08_correcao_*`, `t3_08_versao_superada_*` |
+| F3C-37 | A impressao e' invariante a caminho, lote, campos humanos e forma Unicode; **nao** a mudanca de conta/nome de linha | `impressao.rs` | `t3_13_*` (dois testes) |
+| F3C-38 | Impressao de apresentacao **separada**: renomear uma conta no plano sinaliza `APRESENTACAO_MUDADA` e nao invalida as aprovacoes | `impressao.rs`, `revisao.rs` | `t3_09_*`, `apresentacao_mudada_*` |
+| F3C-39 | Repeticao exata declarada; decisoes incompativeis no mesmo alvo e instante = conflito, sem "vence o ultimo". A escolha do conflito relatado segue a **ordem canonica dos eventos**, nunca a posicao dos documentos | `revisao.rs` | `t3_14_*` (tres testes), `r3_escolha_do_conflito_*`, `r3_conflito_estavel_*` |
+| F3C-40 | A sequencia historica **nao** e' calculavel: `Dado` `NAO_DISPONIVEL` com fonte declarada (D8.5) | `revisao.rs` | `t3_16_documento_sem_linhas_*` |
+| F3C-41 | Tudo ou nada: em erro nenhuma vista parcial e' produzida | `revisao.rs` | `t3_18_*` |
+| F3C-42 | `APROVADO` sem evento de proveniencia nao e' revisao verificada: dado original conservado, fora do extrato revisado, sanavel com evento. Entrar no extrato revisado exige uma aprovacao humana **ativa**: revogada a sanatoria, a linha sai de novo | `revisao.rs` | `t3_16_*` (dois testes), `r1_revogacao_da_sanatoria_*`, `r1_revogacao_de_linha_ok_*` |
+| F3C-43 | Todo ordenamento canonico **normaliza as chaves antes** de comparar, compara os bytes UTF-8 e emite em NFC; empates canonicos nao descartam nada | `impressao.rs`, `revisao.rs` | `t3_13_n1_*`, `t3_20_empate_canonico_*`, `avisos_da_vista_*` |
+| F3C-44 | Ordem canonica de seis niveis, total sobre os eventos sobreviventes; a posicao no array nao entra na ordem, na saida nem na escolha do erro | `revisao.rs` | `t3_17_*`, `t3_21_*`, `t3_11_*` |
+| F3C-45 | So a **identidade exata** autoriza o colapso de uma repeticao; nenhuma deduplicacao semantica | `revisao.rs` | `t3_22_c1_*`, `t3_22_c2_c3_c4_c5_*` |
+| F3C-46 | `texto_exato_evento` usa producoes proprias (`str_exato`, `dado_esatto_string`) que conservam bytes originais, presenca e `motivo` dos `Dado`; o instante conserva a hora local, os nanossegundos e o offset **em segundos** | `revisao.rs` | `t3_22_codificacao_exata_e_injetiva_*`, `texto_exato_nao_normaliza_*`, `r2_offset_declarado_com_segundos_*`, `r2_nanossegundos_*` |
+
+Superficie publica nova:
+
+```rust
+// impressao.rs
+pub fn texto_canonico(&ContextoDocumento) -> String;
+pub fn impressao_conteudo(&ContextoDocumento) -> String;         // 64 hex
+pub fn contas_mostradas(&ContextoDocumento, &PlanoContas)
+    -> Result<Vec<ContaMostrada>, ContaAusenteNoPlano>;
+pub fn texto_apresentacao(&str, &[ContaMostrada]) -> String;
+pub fn impressao_apresentacao(&str, &[ContaMostrada]) -> String;
+
+// revisao.rs
+pub fn aplicar_revisao(&[ContextoDocumento], &PlanoContas, &[EventoRevisao])
+    -> Result<VistaRevisada, ErroRevisao>;
+pub fn texto_exato_evento(&EventoRevisao) -> String;
+pub fn chave_canonica(&EventoRevisao) -> ChaveCanonica;
+```
+
+**Limites deste bloco, declarados.** Os eventos sao um **parametro**: nao
+existe arquivo, nem banco, nem ficheiro. A trilha fica consultavel em memoria,
+e isso **nao** e' conservacao em disco: fechar o processo perde os eventos. O
+`autor` e' uma declaracao, nao uma autenticacao: o sistema nao sabe quem
+escreveu aquela cadeia. `AlvoAmbiguo` existe no tipo de erro mas **nao e'
+alcancavel** pela API: duas linhas com a mesma `(chave, impressao, origem,
+conta, ordinal)` exigiriam dois documentos com a mesma chave, que a validacao
+da 3C.2 rejeita antes (`alvo_ambiguo_e_interceptado_antes_pela_validacao_da_3c2`
+registra qual controle intercepta o caso). Corrigir uma conta, um valor, um
+pagamento ou uma regra YAML continuam operacoes separadas, nao alcancaveis
+daqui.
+
 **`dinheiro.rs`: uma so aritmetica monetaria no crate.** Os helpers de centavos
 da fase 3B foram movidos para um modulo interno compartilhado, sem duplicacao e
 **sem mudanca de comportamento**: os testes da 3B continuam identicos e verdes.
@@ -258,7 +324,11 @@ atualizada junto com uma decisao declarada sobre as regras.
 | `rust_decimal` | valores monetarios exatos | `f64` daria erro de precisao silencioso em dinheiro |
 | `chrono` | datas (`NaiveDate`) | equivalente de `datetime.date` |
 | `unicode-normalization` | NFD + remocao de acentos | equivalente de `unicodedata` do Python |
-| `sha2` | `hash_registro` dos lancamentos (fase 3B) | adicionada em 2026-10-16 com autorizacao explicita; mesmo payload de quatro campos do Python, para que os codigos continuem comparaveis com o historico |
+| `sha2` | `hash_registro` dos lancamentos (3B) e impressoes canonicas (3C.3.a) | adicionada em 2026-10-16 com autorizacao explicita; mesmo payload de quatro campos do Python, para que os codigos continuem comparaveis com o historico |
+
+A fase 3C.3.a **nao acrescentou nenhuma dependencia**: `sha2`, `chrono` (com
+`DateTime<FixedOffset>` para o instante declarado) e `unicode-normalization`
+(NFC das impressoes) ja' estavam no `Cargo.toml`.
 
 ## Verificacao
 
@@ -268,7 +338,14 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-208 testes: 192 de unidade na lib, 3 no binario, 13 de integracao de CLI.
+267 testes: 251 de unidade na lib, 3 no binario, 13 de integracao de CLI. Os 59
+novos sao da fase 3C.3.a (17 em `impressao.rs`, 42 em `revisao.rs`); os 208
+anteriores continuam verdes **sem nenhuma alteracao**.
+
+Seis desses 59 sao regressoes dos tres achados do audit de 2026-10-21
+(R3C3A-01/02/03), escritos **antes** da correcao e com as expectativas
+corretas: falharam, depois passaram. Os tres sao reproduziveis pela API
+publica, e nenhum deles era coberto pelos testes anteriores.
 
 Testes que amarram o codigo aos dados reais, nao a fixtures:
 
@@ -323,3 +400,13 @@ fazer um teste passar.
    aninhado) e' recusado pela contagem, nao por um schema. Se a validacao real
    do layout for necessaria, e' uma decisao separada, com fonte e testes
    proprios.
+10. **A revisao da 3C.3.a nao e' persistente nem autenticada.** Os eventos sao
+    um parametro em memoria: fechar o processo perde a trilha, e o `autor` e'
+    uma cadeia declarada, nao uma identidade verificada. Qualquer uso
+    operacional da revisao depende de 3C.3.b (persistencia, ligada a D7) e de
+    uma decisao separada sobre autenticacao, que **nao** existe hoje.
+11. **Mudar o texto de um aviso muda as impressoes** da 3C.3.a: os `detalhe`
+    entram nos bytes canonicos. E' um limite declarado, nao um descuido —
+    qualquer alteracao desse tipo exige `IMPRESSAO-CONTEUDO/v2` e a
+    conservacao das impressoes `v1`, senao as aprovacoes antigas deixam de
+    casar com o conteudo que descrevem.
