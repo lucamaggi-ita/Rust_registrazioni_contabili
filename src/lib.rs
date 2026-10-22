@@ -12,6 +12,8 @@
 //! Fase 3C/3D (pendentes): pre-livro diario, revisao, exportacao e DRE.
 
 pub mod alocacao;
+pub mod arquivo;
+pub mod arquivo_io;
 pub mod classificacao;
 pub(crate) mod dinheiro;
 pub mod impressao;

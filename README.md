@@ -20,9 +20,10 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 | 3C.1 | Analise e especificacao de pre-livro, revisao e exportacao | **PRONTA** (`SPECIFICA_FASE3C_PRELIBRO_REVISIONE_EXPORT.md`, revisao 2.1) |
 | 3C.2 | Pre-livro em memoria: particoes, resumos, invariantes (`prelivro.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-17 (R3C2-01/02/03 fechados), registrada e publicada |
 | 3C.3 — especificacao | Revisao humana, versoes e impressao canonica | **PRONTA** (`SPECIFICA_FASE3C3_REVISIONE_VERSIONI.md`, revisao 4): audit tecnico superado em 2026-10-21; as dez subescolhas D8.1–D8.5 e D9.1–D9.5 foram **aprovadas** na opcao (a) |
-| 3C.3.a | Impressoes canonicas (`impressao.rs`) e revisao pura em memoria (`revisao.rs`) | **IMPLEMENTADA, EM ESPERA DE AUDIT** (2026-10-21) |
-| 3C.3.b | Persistencia dos eventos e do historico de revisao | NAO_INICIADA: depende de D7 |
-| 3C.4 | Adaptadores de entrada bruta, arquivo autoritativo, exportacao | NAO_INICIADA |
+| 3C.3.a | Impressoes canonicas (`impressao.rs`) e revisao pura em memoria (`revisao.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-21 (R3C3A-01/02/03 fechados), registrada em Git |
+| 3C.3.b — especificacao | Persistencia do arquivo autoritativo: formato, codec, protocolo de publicacao e recuperacao | **PRONTA** (`SPECIFICA_FASE3C3B_PERSISTENZA_ARCHIVIO.md`, revisao 3): audit tecnico superado em 2026-10-22; D14–D17 **aprovadas** na opcao (a) |
+| 3C.3.b.1 | Arquivo autoritativo em JSON (`arquivo.rs`) e protocolo de IO (`arquivo_io.rs`) | **AUDIT TECNICO INDEPENDENTE SUPERADO** em 2026-10-22: quatro achados (R3C3B1-01/02/03/04) levantados, corrigidos e **fechados** pelo audit dirigido. Falta so' o registro em Git autorizado |
+| 3C.4 | Adaptadores de entrada bruta, exportacao para Excel/CSV | NAO_INICIADA |
 | 3C.5 | Uso pela CLI | NAO_INICIADA |
 | 3D | DRE gerencial por competencia | NAO_INICIADA |
 
@@ -31,8 +32,14 @@ classificar cada item contra o plano de contas e **alocar o documento em
 lancamentos com reconciliacao**. A fase 3B **nao grava nada**: `alocar_nfe` e'
 uma funcao pura que devolve os lancamentos em memoria. A 3C.2 agrega esses
 lancamentos num pre-livro, e a 3C.3.a registra **decisoes humanas declaradas**
-sobre ele — tambem em memoria. **Gravar** continua sendo 3C.4; agregar a DRE
-e' 3D.
+sobre ele — tambem em memoria. A 3C.3.b.1 **grava**: um arquivo JSON unico que
+e' a fonte autoritativa (D7(a)) dos contextos originais e das declaracoes de
+revisao, com publicacao de um so ponto de commit. **Exportar** para Excel ou
+CSV continua sendo 3C.4; agregar a DRE e' 3D.
+
+O que o arquivo **nao** guarda: a vista revisada, os resumos, as particoes e o
+extrato. Sao derivaveis dos dados conservados, e salva-los criaria uma segunda
+verdade.
 
 ## Uso
 
@@ -233,6 +240,112 @@ Fora deste bloco, por contrato: entradas brutas (`INCOMPLETO`,
 `NAO_RECONHECIDO`), arquivo autoritativo, exportacao, import do historico, CLI
 e transicoes de revisao humana.
 
+### Fase 3C.3.b.1 - arquivo autoritativo e protocolo de IO
+
+Dois modulos com responsabilidades separadas. `arquivo.rs` e' **puro**: nao
+abre ficheiros, nao le o relogio e nao conhece caminhos. `arquivo_io.rs` faz
+IO e nao decide nada sobre o conteudo.
+
+| Contrato | O que garante | Onde | Teste |
+|---|---|---|---|
+| PER-01/02 | `FANTOZZI-ARQUIVO/v1`, `versao_schema` 1, e as tres gramaticas (`IMPRESSAO-CONTEUDO/v1`, `IMPRESSAO-APRESENTACAO/v1`, `EVENTO-EXATO/v1`) escritas nos bytes e verificadas na leitura | `arquivo.rs` | `tp11_formato_schema_e_gramatica_tem_erro_proprio` |
+| PER-03 | Um esquema mais novo **nao** e' lido por tentativa: `SchemaMaisNovo` antes de qualquer interpretacao | `arquivo.rs` | idem |
+| PER-05 | Cada execucao conserva a **identidade do plano** que usou; o plano nao vive na raiz | `arquivo.rs` | `tp02_execucao_conserva_o_proprio_plano` |
+| PER-07/20 | Todo monetario e' **texto**. Um numero JSON e' recusado antes de qualquer conversao; o texto passa por `from_str_exact` **e** pela reproducao com `to_string`, porque so o par recusa `3.5e1`, `+35.00`, `35.` e `-0.00` | `arquivo.rs` | `tp04_numero_json_*`, `tp04_decimais_hostis_*` (motivos medidos, um por caso), `tp04_decimais_validos_*`, `tp04_decimal_dentro_de_dado_*` |
+| PER-10 | Ausencia, zero e vazio ficam distintos: um `Dado` ausente escreve `null` explicito com estado e motivo, e um estado incoerente e' recusado por `Dado::novo` | `arquivo.rs` | `tp03_ausencia_zero_e_vazio_*`, `tp03_dado_incoerente_*` |
+| PER-11/12 | Leitura **restritiva**: DTO com `deny_unknown_fields` em cada struct, sem arvore `serde_json::Value`. Campo desconhecido e chave duplicada sao recusados **tambem aninhados** | `arquivo.rs` | `tp11_campo_desconhecido_aninhado_*`, `tp11_chave_duplicada_aninhada_*` |
+| PER-13/14 | Impressoes **recalculadas** na validacao: conteudo alterado ou impressao alterada dao `ImpressaoDivergente`, e nenhum hash e' atualizado para aceitar o conteudo mudado | `arquivo.rs` | `tp12_impressao_ou_conteudo_alterados_*` |
+| PER-15 | O instante vai em **dois campos** (`local` + `offset_segundos`): a cadeia RFC3339 perderia os segundos do offset | `arquivo.rs` | `tp06_offset_com_segundos_e_nanossegundos_*`, `tp06_mesmo_instante_absoluto_*`, `tp06_offset_impossivel_*` |
+| PER-16 | Historia: o mesmo conteudo noutro lote da' **dois** snapshots, e uma correcao a total invariado muda a impressao | `arquivo.rs` | `tp09_*` (dois testes), `tp07_duas_linhas_com_o_mesmo_payload_*` |
+| PER-17 | Append-only **logico**: as declaracoes comparam-se como **multiconjunto**, logo duas ocorrencias identicas nao podem virar uma. Snapshots e execucoes comparam-se pela **codificacao exata**, nao por `PartialEq`, porque `10.00 == 10.0000` para `Decimal` e a escala e' um dado conservado | `arquivo.rs` | `tp16_*` (dois testes), `r1_acrescimo_recusa_mudanca_de_escala_*` (dois testes), `r1_candidato_identico_depois_do_round_trip_*` |
+| PER-04 | Um so' `lote.id` por execucao, imposto pelo **validador** e nao so' pelo construtor: duas execucoes com o mesmo ID dariam duas identidades de plano para o mesmo lote e um referencia ambiguo | `arquivo.rs` | `r3_execucao_duplicada_e_rejeitada_pelo_validador` |
+| PER-09 | Bytes nao interpretaveis tem **impressao** mesmo assim: `observar` responde `token: None`, `candidatos` continua a listar os outros, `recuperar` compara o estado e conserva os bytes corrompidos como prova | `arquivo.rs`, `arquivo_io.rs` | `r2_*` (sete testes) |
+| PER-18/22 | Ordem fisica canonica e bytes deterministas; o ultimo nivel da ordem e' o **record** serializado, nao a declaracao, porque `impressao_evento` nao e' um campo dela | `arquivo.rs` | `tp17_*` (dois testes), `tp22_*` (dois testes) |
+| PER-19 | Apresentacao mudada e' uma **divergencia**, nao um erro: as decisoes ficam | `arquivo.rs` | `tp18_*` (dois testes) |
+| PER-21 | Um so ponto de commit (`fs::rename`); tudo o que falha antes deixa o corrente **intacto byte a byte** | `arquivo_io.rs` | `tp13_falhas_antes_do_commit_*`, `tp13_corrente_corrompido_*` |
+| PER-23 | Numeracao sob lucchetto, com **base completa**: o token leva revisao **e** impressao do conteudo, porque dois arquivos diferentes podem ter o mesmo contador | `arquivo_io.rs` | `tp14_duas_publicacoes_da_mesma_base_*`, `tp14_mesmo_contador_de_outro_arquivo_nao_basta` |
+| PER-24 | Lucchetto cooperativo com `create_new`, liberacao **explicita** e confirmacao do conteudo: ninguem desbloqueia por outro | `arquivo_io.rs` | `tp14_lucchetto_realmente_tomado_*` |
+| PER-06/08 | Recuperacao explicita: candidatos classificados e **validados** sem carregar, estado esperado conferido **antes** de tocar em nada, corrente conservado como prova e candidato **copiado**, nao movido | `arquivo_io.rs` | `tp15_candidatos_*`, `tp15b_*` (cinco testes) |
+| D7(a) | O arquivo e' autoritativo **entre processos**: quem escreve e quem le sao dois processos distintos | `tests/` | `tp19_persistencia_entre_processos` |
+
+Superficie publica nova:
+
+```rust
+// arquivo.rs — puro
+pub fn serializar(&Arquivo, revisao: u64) -> Result<String, ErroArquivo>;
+pub fn desserializar(&str) -> Result<(Arquivo, u64), ErroArquivo>;
+pub fn desserializar_bytes(&[u8]) -> Result<(Arquivo, u64), ErroArquivo>;
+pub fn verificar_estrutura(&Arquivo) -> Result<(), ErroArquivo>;
+pub fn verificar_apresentacao(&Arquivo, &PlanoContas)
+    -> Result<Vec<Divergencia>, ErroArquivo>;
+pub fn verificar_acrescimo(corrente: &Arquivo, candidato: &Arquivo)
+    -> Result<(), ErroArquivo>;
+pub fn decimal_exato(&str) -> Result<Decimal, ErroArquivo>;
+impl Arquivo { novo, acrescentar_lote, acrescentar_eventos,
+               contextos_do_lote, eventos }
+
+// arquivo_io.rs — IO
+pub fn observar(&Destino) -> Result<EstadoObservado, ErroIo>;
+pub fn ler(&Destino) -> Result<Leitura, ErroIo>;
+pub fn publicar(&Destino, &Arquivo, Option<&TokenBase>, &MetadadosLucchetto)
+    -> Result<Publicacao, ErroIo>;
+pub fn candidatos(&Destino) -> Result<Candidatos, ErroIo>;
+pub fn recuperar(&Destino, &Path, &EstadoObservado, &MetadadosLucchetto)
+    -> Result<Publicacao, ErroIo>;
+pub fn liberar(&Destino, &MetadadosLucchetto) -> Result<(), ErroIo>;
+```
+
+**Diferenca tecnica a declarar.** As etiquetas dos enums no arquivo vem da
+representacao `serde` dos **proprios tipos** do modelo, nao de uma tabela
+paralela: ha' uma so verdade. Por isso `TipoConta` e' `snake_case` (`"custo"`)
+enquanto os outros sao `SCREAMING_SNAKE_CASE`, e `StatusDado::NaoAplicavel` e'
+`"N.A."`. O teste `etiquetas_dos_enums_do_arquivo` fixa cada uma. Excecao
+documentada: `OperacaoRevisao` so deriva `Serialize` e `revisao.rs` e' auditado
+e nao se toca, logo o arquivo tem um `OperacaoDto` local — e o mesmo teste
+compara as tres etiquetas com `OperacaoRevisao::rotulo()`, de modo que uma
+divergencia futura falha em vez de mudar o formato em silencio.
+
+**Quatro achados do audit independente de 2026-10-22**, todos corrigidos com
+regressao permanente:
+
+1. **R3C3B1-01**: o confronto append-only usava `PartialEq`, e para `Decimal`
+   isso e' igualdade **numerica**: `10.00 == 10.0000`. A impressao canonica
+   normaliza a escala antes de comparar, logo tambem nao podia ver a mudanca —
+   eram dois controles cegos para a mesma coisa. Mudar a escala original
+   passava pela publicacao ordinaria. Agora snapshots e execucoes comparam-se
+   pela **codificacao exata**, a mesma que vai para o disco.
+2. **R3C3B1-02**: a leitura dependia de `read_to_string`, logo um corrente
+   corrompido na **codificacao** (bytes nao UTF-8) fazia falhar `observar`,
+   `candidatos`, `ler` e — pior — o proprio `recuperar`, que nao chegava a
+   comparar o estado esperado. Aquisicao dos bytes e interpretacao do texto
+   estao agora separadas: `ErroArquivo::NaoUtf8` e' um erro de **conteudo**,
+   nao de IO, e nenhuma conversao com perda fabrica um texto.
+3. **R3C3B1-03**: a unicidade de `lote.id` era imposta so' por
+   `Arquivo::acrescentar_lote`, mas o modelo e' publico e o leitor nao passa
+   por esse construtor. Duas execucoes com o mesmo ID passavam a validacao.
+   Agora o validador partilhado recusa com `ExecucaoConflitante`, **sem**
+   deduplicar escolhendo a primeira ou a ultima.
+4. **R3C3B1-04**: `resumo` cortava a 120 **bytes**, podendo dividir um
+   caractere: a funcao que devia **relatar** `HistoriaTruncada` entrava em
+   panico. Agora abrevia num limite de caractere.
+
+**Dois achados que os testes deste bloco produziram** e que valem como
+registro:
+
+1. `sync_all` sobre um handle de **leitura** e' negado no Windows
+   (`PermissionDenied`, codigo 5). A copia da geracao e a prova eram abertas
+   com `File::open`: a publicacao falhava sempre que havia geracao a
+   conservar. Corrigido com um helper que abre em escrita antes de
+   sincronizar. Nenhum teste anterior cobria o caso, porque a primeira
+   publicacao nao conserva nada.
+2. Depois de uma falha nos passos 6–7, o temporario escrito no passo 5
+   **permanece**, e a tentativa seguinte para com `ResiduoPresente`. Nao e' um
+   descuido: §9.3 da especificacao proibe a biblioteca de apagar um candidato,
+   mesmo o seu proprio rascunho abandonado. A consequencia operacional e' que
+   retomar exige mover o residuo — e, depois de um rollback intencional,
+   tambem a geracao conservada, que D16 proibe sobrescrever. Esta' em
+   `tp15b_rollback_intencional_e_declarado_nao_renumerado`.
+
 O Python so le `regras` e `conta_fallback_id`. C13 torna visivel o resto:
 
 - `regras_por_fornecedor` (1 regra: fornecedor com descricao generica "KILOS")
@@ -326,9 +439,18 @@ atualizada junto com uma decisao declarada sobre as regras.
 | `unicode-normalization` | NFD + remocao de acentos | equivalente de `unicodedata` do Python |
 | `sha2` | `hash_registro` dos lancamentos (3B) e impressoes canonicas (3C.3.a) | adicionada em 2026-10-16 com autorizacao explicita; mesmo payload de quatro campos do Python, para que os codigos continuem comparaveis com o historico |
 
+| `serde_json` | formato do arquivo autoritativo (3C.3.b.1) | adicionada em 2026-10-22 com autorizacao explicita. Ja' estava em `Cargo.lock` como dependencia **opcional** de `rust_decimal` e na cache local, logo o `diff` do lockfile e' de **uma linha** e nada foi baixado |
+
 A fase 3C.3.a **nao acrescentou nenhuma dependencia**: `sha2`, `chrono` (com
 `DateTime<FixedOffset>` para o instante declarado) e `unicode-normalization`
 (NFC das impressoes) ja' estavam no `Cargo.toml`.
+
+A 3C.3.b.1 acrescentou **uma**, `serde_json = "1.0.154"`, autorizada no
+mandato. Porque JSON e nao YAML: `serde_yaml` esta' **deprecado upstream** e
+seria uma segunda verdade sobre o formato de persistencia; porque nao um
+formato proprio: a garantia que o arquivo precisa — recusar uma chave
+duplicada, recusar um campo desconhecido — vem de struct com
+`deny_unknown_fields`, que um parser escrito a mao teria de reimplementar.
 
 ## Verificacao
 
@@ -338,9 +460,39 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-267 testes: 251 de unidade na lib, 3 no binario, 13 de integracao de CLI. Os 59
-novos sao da fase 3C.3.a (17 em `impressao.rs`, 42 em `revisao.rs`); os 208
-anteriores continuam verdes **sem nenhuma alteracao**.
+337 testes: 319 de unidade na lib, 3 no binario, 15 de integracao (13 de CLI e
+2 de persistencia entre processos). Os 70 novos sao da fase 3C.3.b.1 (47 em
+`arquivo.rs`, 21 em `arquivo_io.rs`, 2 em
+`tests/persistencia_entre_processos.rs`); os 267 anteriores continuam verdes
+**sem nenhuma alteracao**.
+
+Treze desses 70 sao regressoes dos quatro achados do audit de 2026-10-22
+(R3C3B1-01/02/03/04), escritas **antes** da correcao e com as expectativas
+corretas: falharam — tres por asserccao e uma por panico no proprio caminho de
+erro —, depois passaram. Os quatro sao reproduziveis pela API publica.
+
+Os testes de IO trabalham em arenas sob a directoria temporaria do sistema
+(`%TEMP%\fantozzi_3c3b1\`), uma por teste, e **nao** apagam nada fora dela. Um
+`TEMP` nao gravavel faz falhar os testes de IO sem que haja nada de errado no
+codigo.
+
+O teste entre processos reexecuta o **proprio binario de teste** com
+`std::env::current_exe()` e `--exact`, passando o papel por variavel de
+ambiente: um processo publica, outro le, um terceiro encontra o lucchetto e
+para. Verifica tambem que o filho declarou ter executado um teste, porque um
+filtro sem correspondencia sairia com sucesso **sem executar nada** e o papel
+pareceria superado.
+
+Controle fisico independente do ficheiro publicado (TP-20): os bytes sao
+examinados sem passar pelo codec (BOM, CR, `}` + LF final, monetario textual,
+`null` explicito, offset em segundos, contagens de ocorrencias). A contraprova
+com uma **segunda** ferramenta foi feita a mao e registada no apendice da
+especificacao: sobre o **arquivo de prova completo** (dois snapshots, duas
+declaracoes, publicado por `publicar` num destino novo),
+`Get-FileHash -Algorithm SHA256` do PowerShell deu `fb871504…a05` sobre 10557
+bytes, **identico** ao valor calculado pelo crate. O ficheiro do teste **entre
+processos** e' outro conteudo e tem outra medida: um hash nao se transfere de
+um para o outro.
 
 Seis desses 59 sao regressoes dos tres achados do audit de 2026-10-21
 (R3C3A-01/02/03), escritos **antes** da correcao e com as expectativas
@@ -400,13 +552,44 @@ fazer um teste passar.
    aninhado) e' recusado pela contagem, nao por um schema. Se a validacao real
    do layout for necessaria, e' uma decisao separada, com fonte e testes
    proprios.
-10. **A revisao da 3C.3.a nao e' persistente nem autenticada.** Os eventos sao
-    um parametro em memoria: fechar o processo perde a trilha, e o `autor` e'
-    uma cadeia declarada, nao uma identidade verificada. Qualquer uso
-    operacional da revisao depende de 3C.3.b (persistencia, ligada a D7) e de
-    uma decisao separada sobre autenticacao, que **nao** existe hoje.
+10. **A revisao conserva-se, mas continua nao autenticada.** A 3C.3.b.1 fechou
+    a parte da persistencia: os eventos e os contextos originais ficam num
+    arquivo autoritativo que sobrevive ao processo. O `autor` continua a ser
+    uma cadeia **declarada**, nao uma identidade verificada: o sistema registra
+    quem **disse** ter aprovado, nao quem aprovou. Autenticacao e' uma decisao
+    separada, que **nao** existe hoje.
 11. **Mudar o texto de um aviso muda as impressoes** da 3C.3.a: os `detalhe`
     entram nos bytes canonicos. E' um limite declarado, nao um descuido —
     qualquer alteracao desse tipo exige `IMPRESSAO-CONTEUDO/v2` e a
     conservacao das impressoes `v1`, senao as aprovacoes antigas deixam de
     casar com o conteudo que descrevem.
+12. **Durabilidade depois de perda de alimentacao: `NAO_VERIFICADO`.** No
+    Windows nao se pode sincronizar uma **directoria** (`sync_all` sobre a
+    directoria da' `PermissionDenied`, medido). O conteudo escrito e
+    sincronizado nao fica lacerado, mas **quais nomes** sobrevivem — o
+    corrente, o temporario, a geracao acabada de copiar — nao e' demonstravel.
+    Nao se promete o contrario; o recupero lista e valida os candidatos e nao
+    afirma qual deveria existir.
+13. **O lucchetto e' cooperativo.** Protege contra outra copia **deste**
+    programa, nao contra um editor de texto, um backup ou um script que
+    escreva no ficheiro. Um escritor nao cooperante e' detectado **depois**,
+    pela base desatualizada ou pela impressao divergente, nunca impedido.
+14. **O arquivo cresce sem limite.** D16 decidiu nao podar: cada publicacao
+    conserva a geracao anterior e nenhuma prova e' apagada. Quem opera tem de
+    gerir o espaco, e a biblioteca **nao** apaga nada por iniciativa propria.
+15. **Retomar depois de uma falha ou de um rollback exige um gesto humano.**
+    O temporario abandonado e a geracao conservada nao sao sobrescritos nem
+    apagados: a publicacao seguinte para com `ResiduoPresente` ou
+    `GeracaoJaPresente` ate' que o operador os mova. E' o preco de §9.3 e de
+    D16, nao um bloqueio acidental.
+16. **`PublicacaoComLucchettoResiduo` nao esta' demonstrada por teste.** O
+    campo `lucchetto_residuo` fica `true` quando o commit passou e a liberacao
+    falhou; reproduzi-lo exigiria injectar uma falha entre os passos 7 e 8, o
+    que a API publica nao permite. Os testes provam que numa publicacao normal
+    o campo e' `false` e o lucchetto desaparece; o caso `true` e'
+    **NAO_VERIFICADO**.
+17. **O arquivo numera, mas nao datilografa a historia de um documento.**
+    D17(a) deixou a sequencia historica como `NAO_DISPONIVEL`:
+    `revisao_arquivo` conta publicacoes do ficheiro, nao versoes de um
+    documento. Depois de um rollback o mesmo numero e' reutilizado — dado
+    declarado, nao efeito colateral escondido.

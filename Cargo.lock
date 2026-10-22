@@ -557,6 +557,7 @@ dependencies = [
  "quick-xml",
  "rust_decimal",
  "serde",
+ "serde_json",
  "serde_yaml",
  "sha2",
  "unicode-normalization",
