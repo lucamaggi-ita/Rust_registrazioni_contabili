@@ -5,7 +5,7 @@
 | Data | 2026-10-21 |
 | Mandato | `MANDATO_CLAUDE_FASE3C3B_PERSISTENZA_SPECIFICA_20261021.md` |
 | Perimetro | **analisi e specifica**. Nessuna riga di Rust del progetto, nessuna modifica di `Cargo.*`, nessun archivio reale, nessun export, CLI o produzione |
-| Stato | **AUDIT TECNICO DELLA SPECIFICA SUPERATO** il 2026-10-22, con R3C3B-01…04 chiusi. La persistenza **non** è implementata: nessuna riga di writer o reader esiste |
+| Stato | **AUDIT TECNICO DELLA SPECIFICA SUPERATO** il 2026-10-22, con R3C3B-01…04 chiusi. Il primo lotto `3C.3.b.1` è stato **implementato** il 2026-10-22 e attende audit: esecuzione e prove in **§18**. Il corpo del documento resta quello della revisione 3 approvata, quindi le frasi al presente che dicono «nessuna riga di writer esiste» vanno lette come fotografia della stesura, superata da §18.1 |
 | HEAD alla stesura | `e6dfca2669c56d9070fd5141908da44fe9ac8cc3` |
 | Decisione adottata | **D7(a)**: l'archivio strutturato è la fonte autorevole, il workbook è un derivato. Adottata dal mandato, non riaperta qui |
 | Decisioni già approvate | D8.1–D8.5, D9.1–D9.5, D10(a), D13(a): invariate |
@@ -30,7 +30,10 @@
 Due regole che valgono su tutto il testo:
 
 1. Nessuna riga del writer o del reader esiste. Tutti i test `TP-nn` sono
-   **pianificati**: nessuno è stato eseguito.
+   **pianificati**: nessuno è stato eseguito. *(Vero alla stesura, 2026-10-21.
+   **Superato il 2026-10-22**: writer, reader e 57 test esistono, mappa in
+   §18.3. La regola resta scritta perché le etichette del corpo del documento
+   vanno lette con la conoscenza di allora.)*
 2. Le sonde di §3 misurano **il formato e il filesystem**, non il futuro
    lettore Rust. Una sonda che serializza un `Decimal` non dimostra che il
    lettore validerà l'archivio: lo dimostreranno i test pianificati.
@@ -137,6 +140,12 @@ Conclusione, **[PROPOSTA]**: l'aggiunta di `serde_json = "1.0.154"` a
 `Cargo.toml` è **realizzabile offline** e alla versione già risolta, ma **non è
 autorizzata** da questo documento. Va chiesta nel mandato implementativo,
 insieme al perimetro che la usa. Essere in cache non è un'autorizzazione.
+
+> **Aggiornamento del 2026-10-22.** L'autorizzazione è arrivata con
+> `MANDATO_CLAUDE_FASE3C3B1_IMPLEMENTAZIONE_20261022.md`: `serde_json =
+> "1.0.154"` è ora in `[dependencies]`. La previsione di questo paragrafo si è
+> verificata, il diff di `Cargo.lock` è di **una riga** e nulla è stato
+> scaricato. Dettaglio in §18.1.
 
 ### 3.3 S1 — i `Decimal` si serializzano come **testo esatto**
 
@@ -1859,3 +1868,247 @@ che dovrà nominare: i file ammessi, l'autorizzazione esplicita per
 `serde_json = "1.0.154"`, i contratti `PER-01…PER-24` e le prove
 `TP-01…TP-22` più `TP-15b`. L'implementazione, i suoi commit e il suo push
 restano da autorizzare separatamente.
+
+---
+
+## 18. Appendice di esecuzione — lotto 3C.3.b.1 (2026-10-22)
+
+Questa appendice è stata aggiunta **dopo** l'implementazione del primo lotto,
+autorizzata da `MANDATO_CLAUDE_FASE3C3B1_IMPLEMENTAZIONE_20261022.md`. Il
+corpo del documento resta quello della revisione 3, approvato dall'audit: qui
+si registra soltanto che cosa è stato attuato, che cosa è stato **misurato** in
+più e che cosa resta non verificato.
+
+### 18.1 Che cosa è cambiato rispetto alle due regole di §0
+
+Le due regole di §0 dicevano «nessuna riga del writer o del reader esiste» e
+«tutti i test `TP-nn` sono pianificati». Dal 2026-10-22 **non valgono più**, e
+restano nel testo come fotografia del momento della stesura:
+
+| Affermazione di §0 e §3.2 | Stato dopo il lotto 3C.3.b.1 |
+|---|---|
+| nessuna riga di writer o reader esiste | **superata**: `src/arquivo.rs` (codec e validazione, puro) e `src/arquivo_io.rs` (protocollo di IO) |
+| i test `TP-nn` sono pianificati, nessuno eseguito | **superata**: 57 test eseguiti, mappa in §18.3 |
+| `serde_json` è disponibile ma **non** autorizzato | **autorizzato** dal mandato implementativo: `serde_json = "1.0.154"` è in `[dependencies]`. Il diff di `Cargo.lock` è di **una riga** (`serde_json` fra le dipendenze del pacchetto del progetto), perché la versione era già risolta come dipendenza opzionale di `rust_decimal` ed era già in cache: nessuno scaricamento |
+
+### 18.2 Perimetro effettivo
+
+| Voce | Valore |
+|---|---|
+| Baseline | `27eb6083b75643b02adca84cfa7373911e847950` |
+| File nuovi | `src/arquivo.rs`, `src/arquivo_io.rs`, `tests/persistencia_entre_processos.rs` |
+| File modificati | `Cargo.toml` (una riga), `Cargo.lock` (una riga), `src/lib.rs` (due righe di `pub mod`) |
+| Perimetro escluso, verificato intatto | `revisao.rs`, `impressao.rs`, `prelivro.rs`, `alocacao.rs`, `dinheiro.rs`, `modelos.rs`, `nfe.rs`, `regras.rs`, `main.rs`, i test e le fixture preesistenti, `config/*`, `samples/*`: `git diff --name-status` elenca **soltanto** i tre file modificati sopra |
+| Impronte canoniche di `config/*` e `samples/*` | invariate: `b2d8fc9d` (`csv_columns.yaml`), `40b0ee5c` (`mapeamento_dre.yaml`), `c25715f9` (`plano_contas_gerencial.yaml`), `81bd7e3b` (`regras_classificacao_despesas.yaml`), `16b5d34b` (`regras_classificacao_produtos.yaml`), `6ece3265` (`nfe_oesa_12566_20260505.xml`) |
+| Test | 324 totali: 306 unitari nella lib, 3 nel binario, 15 di integrazione. I 267 precedenti restano verdi **senza alcuna modifica** |
+| Verifiche | `cargo test --locked`, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`: tutte pulite |
+
+### 18.3 Mappa delle prove: da `TP-nn` al test eseguito
+
+| Prova | Test | Esito |
+|---|---|---|
+| **TP-01** | `tp19_persistencia_entre_processos` (passo 2: il padre rilegge quello che un altro processo ha scritto) | superata |
+| **TP-02** | `tp02_documento_sem_linhas_conserva_identidade_e_reconciliacao`, `tp02_execucao_conserva_o_proprio_plano`, `tp21_paridade_dto_modelo_no_round_trip` | superata |
+| **TP-03** | `tp03_ausencia_zero_e_vazio_ficam_distintos`, `tp03_dado_incoerente_e_rejeitado_pelo_validador_do_modelo` | superata |
+| **TP-04** | `tp04_decimais_validos_conservam_valor_e_escala`, `tp04_numero_json_no_lugar_de_texto_e_rejeitado`, `tp04_decimais_hostis_sao_rejeitados_com_motivo`, `tp04_decimal_dentro_de_dado_e_de_duplicata_tambem_e_exato` | superata |
+| **TP-05** | `tp05_textos_hostis_e_unicode_sobrevivem_sem_normalizacao` | superata |
+| **TP-06** | `tp06_offset_com_segundos_e_nanossegundos_sobrevivem`, `tp06_mesmo_instante_absoluto_com_offsets_diferentes_fica_distinto`, `tp06_offset_impossivel_e_rejeitado_na_leitura` | superata |
+| **TP-07** | `tp07_duas_linhas_com_o_mesmo_payload_sobrevivem` | superata |
+| **TP-09** | `tp09_mesmo_conteudo_em_outro_lote_da_dois_snapshots`, `tp09_conteudo_corrigido_a_total_invariado_e_outro_snapshot` | superata |
+| **TP-10** | `tp10_duas_declaracoes_identicas_nao_se_reduzem_a_uma` | superata |
+| **TP-11** | `tp11_formato_schema_e_gramatica_tem_erro_proprio`, `tp11_campo_desconhecido_aninhado_e_rejeitado`, `tp11_chave_duplicada_aninhada_e_rejeitada`, `tp11_enum_fora_do_dominio_e_campo_obrigatorio_ausente`, `tp11_json_truncado_e_rejeitado`, `tp11_referencia_rompida_e_nomeada` | superata |
+| **TP-12** | `tp12_impressao_ou_conteudo_alterados_sao_rejeitados`, `tp12_dois_conteudos_para_o_mesmo_par_sao_conflito` | superata |
+| **TP-13** | `tp13_destino_ausente_e_primeira_publicacao`, `tp13_segunda_publicacao_conserva_a_geracao`, `tp13_falhas_antes_do_commit_deixam_o_corrente_intacto`, `tp13_corrente_corrompido_para_a_publicacao_mas_nao_o_exame`, `tp13_publicar_com_base_sobre_destino_ausente_e_recusado` | superata |
+| **TP-14** | `tp14_duas_publicacoes_da_mesma_base_nao_passam_as_duas`, `tp14_mesmo_contador_de_outro_arquivo_nao_basta`, `tp14_candidato_que_perde_historia_e_recusado_tambem_no_io`, `tp14_lucchetto_realmente_tomado_bloqueia_e_depois_libera` | superata |
+| **TP-15** | `tp15_candidatos_classifica_cada_papel_e_valida_sem_carregar` | superata |
+| **TP-15b** | `tp15b_recuperar_faz_as_tres_transicoes`, `tp15b_recuperar_nao_toca_nada_se_o_estado_mudou`, `tp15b_candidato_invalido_nao_e_promovido`, `tp15b_recuperar_sobre_destino_ausente_nao_fabrica_prova`, `tp15b_rollback_intencional_e_declarado_nao_renumerado` | superata |
+| **TP-16** | `tp16_acrescimo_recusa_perdas_de_historia`, `tp16_acrescimo_compara_declaracoes_como_multiconjunto` | superata |
+| **TP-17** | `tp17_permutar_eventos_e_snapshots_nao_muda_os_bytes`, `tp17_dois_records_da_mesma_declaracao_com_digest_ausente_ou_presente` | superata |
+| **TP-18** | `tp18_apresentacao_mudada_e_divergencia_nao_erro`, `tp18_apresentacao_ausente_nao_inventa_divergencia` | superata |
+| **TP-19** | `tp19_persistencia_entre_processos` (tre ruoli: `publicar`, `verificar`, `ocupado`) | superata |
+| **TP-20** | `controle_fisico` dentro di `tp19_persistencia_entre_processos`, più la controprova manuale di §18.5 | superata |
+| **TP-21** | `tp21_paridade_dto_modelo_no_round_trip` | superata |
+| **TP-22** | `tp22_duas_serializacoes_da_mesma_revisao_sao_identicas`, `tp22_arrays_de_ordem_memorizada_nao_sao_reordenados` | superata |
+
+**TP-08** non ha un test proprio: era la prova della durabilità dopo perdita di
+alimentazione, dichiarata `[NON_VERIFICATO]` già in §12 e §14 perché su Windows
+la directory non si può sincronizzare. Non è stata simulata: una simulazione
+non avrebbe dimostrato niente sul caso reale. Resta aperta e dichiarata.
+
+### 18.4 Due fatti nuovi, misurati durante l'implementazione
+
+Nessuno dei due era previsto dalla specifica, ed entrambi sono stati trovati
+dai test, non dal ragionamento.
+
+**1. `sync_all` su un handle di sola lettura è negato su Windows.**
+
+| Voce | Valore |
+|---|---|
+| Che cosa | `File::open(percorso)?.sync_all()` su un file appena copiato con `fs::copy` |
+| Esito | `PermissionDenied`, `Os { code: 5, message: "Acesso negado." }` |
+| Dove si manifestava | passo 6 di §9.1 (copia della generazione) e passo 4 di §9.4.2 (conservazione della prova): **ogni** pubblicazione con una generazione da conservare falliva |
+| Perché non si era visto | la prima pubblicazione non conserva niente, quindi il percorso non era esercitato finché non è esistito il test della **seconda** pubblicazione |
+| Correzione | helper `sincronizar`, che apre in scrittura (`OpenOptions::write(true)`) prima di `sync_all`. Il fatto è annotato nel codice come misurato, non supposto |
+
+Questo aggiunge una riga ai fatti di §3.6: non solo `sync_all` su una
+**directory** è negato, ma anche su un **file** aperto in sola lettura. La
+garanzia di §9.1 («il temporaneo è sincronizzato prima del commit») non era
+intaccata, perché il temporaneo si scrive con un handle in scrittura.
+
+**2. Il temporaneo di un tentativo abbandonato resta, e blocca il successivo.**
+
+Se un passo fra il 5 e il 7 di §9.1 fallisce, il file `*.novo.<revisao>` scritto
+al passo 5 **rimane**. La pubblicazione seguente si ferma con
+`ResiduoPresente`. Il comportamento è **conforme** a §9.3, che vieta alla
+libreria di cancellare un candidato: anche il proprio tentativo abbandonato è
+un candidato, e cancellarlo sarebbe un «fallback silenzioso» di quelli che il
+metodo vieta. La conseguenza operativa va però dichiarata, perché non era
+scritta: **riprendere richiede un gesto umano** sul residuo, e dopo un rollback
+intenzionale anche sulla generazione conservata, che D16 vieta di
+sovrascrivere. Registrato in
+`tp15b_rollback_intencional_e_declarado_nao_renumerado`.
+
+**Terzo fatto, sui decimali.** I motivi di rifiuto di PER-20 sono stati
+misurati uno per uno, non supposti:
+
+| Testo | Motivo misurato |
+|---|---|
+| `0.00000000000000000000000000001`, `35.000000000000000000000000000001`, `3.5e1`, `35.00 `, ` 35.00`, `35,00`, stringa vuota | `nao representavel sem perda` (cade su `from_str_exact`) |
+| `+35.00`, `35.`, `.5`, `-0.00` | `forma nao canonica` (supera `from_str_exact`, cade sul confronto del testo riprodotto) |
+
+Le ultime quattro righe sono la prova che la coppia di controlli di §7.3 serve
+davvero: quattro forme distinte passano la conversione e solo il confronto del
+testo le ferma. `-0.00` in particolare diventerebbe `0.00` in silenzio.
+
+### 18.5 TP-20, controprova con un secondo strumento
+
+Il controllo fisico automatico esamina i byte senza passare per il codec. La
+controprova con uno strumento **esterno al progetto** è stata eseguita a mano,
+come previsto dal mandato:
+
+| Voce | Valore |
+|---|---|
+| File | archivio pubblicato da `publicar` su una destinazione nuova, contenuto dell'archivio di prova completo (2 snapshot, 2 dichiarazioni) |
+| Dimensione | 10557 byte, misurata dai due strumenti |
+| SHA-256 secondo il crate (`sha2`) | `fb8715049c07538b393665d7bfa621f296141259c9e0fbf737b559cb35dc6a05` |
+| SHA-256 secondo PowerShell (`Get-FileHash -Algorithm SHA256`) | `fb8715049c07538b393665d7bfa621f296141259c9e0fbf737b559cb35dc6a05` |
+| Coincidenza | **sì** |
+| BOM | assente |
+| Byte `\r` | nessuno |
+| Ultimi due byte | `125` (`}`) e `10` (LF) |
+| Monetario come testo | `"valor": "10.00"` presente; `"valor": 10` assente |
+| Assenze dichiarate | `"status": "NAO_DISPONIVEL"` e `"valor": null` presenti |
+| Unicode | presenti **sia** `U+00E7` (NFC) **sia** `U+0327` (NFD): prova che il record non normalizza i testi |
+
+### 18.6 Che cosa questo lotto **non** fa
+
+Invariato rispetto a §13, e confermato dal codice: nessuna CLI, nessun export,
+nessun import di storico, nessun adattatore di entrate grezze, nessuna
+autenticazione, nessuna potatura, nessuna riparazione automatica di un
+archivio. `arquivo.rs` non apre file, non legge l'orologio, non carica il piano
+dei conti e non conosce percorsi: tutto arriva come parametro. `arquivo_io.rs`
+non sceglie percorsi, non legge variabili d'ambiente e non consulta l'orologio.
+
+Resta `[NON_VERIFICATO]`, e dichiarato tale:
+
+| Affermazione | Perché non è provata |
+|---|---|
+| durabilità dopo perdita di alimentazione (TP-08) | su Windows non si sincronizza la directory; quali nomi sopravvivano non è dimostrabile |
+| `PublicacaoComLucchettoResiduo` (campo `lucchetto_residuo` a `true`) | esige l'iniezione di un guasto fra i passi 7 e 8, che l'API pubblica non permette. È provato soltanto il caso `false` |
+| comportamento su volumi di archivio reali (D14) | nessuna misura su uno storico vero: il file di prova è sintetico |
+| mutua esclusione contro scrittori **non** cooperanti | il lucchetto è cooperativo per decisione D15(a); un editor esterno non è impedito, è rilevato dopo |
+
+### 18.7 Esito dell'audit indipendente del 2026-10-22 e correzioni
+
+L'audit di Codex sull'implementazione ha prodotto quattro riscontri, tutti nel
+perimetro dei due moduli nuovi e tutti riprodotti prima di essere corretti.
+Nessuna decisione di dominio è stata riaperta: D7, D8, D9 e D14–D17 restano
+quelle approvate.
+
+| Riscontro | Che cosa era rotto | Riproduzione prima | Correzione | Regressione |
+|---|---|---|---|---|
+| **R3C3B1-01** | `verificar_acrescimo` confrontava i record con `PartialEq`, che per `Decimal` è l'uguaglianza **numerica**: `10.00 == 10.0000`. L'impronta canonica normalizza la scala, quindi non poteva coprire il buco. Cambiare la rappresentazione originale passava dalla pubblicazione ordinaria | `verificar_acrescimo` restituiva `Ok(())` su un candidato con la sola scala cambiata, in riga, in un `Dado`, in una rata e nel totale | snapshot ed esecuzioni si confrontano sulla **codifica esatta** (`texto_record`, generica), la stessa che va sul disco. Gli eventi conservano il confronto esatto a multinsieme | `r1_acrescimo_recusa_mudanca_de_escala_numa_linha`, `r1_acrescimo_recusa_mudanca_de_escala_aninhada`, `r1_candidato_identico_depois_do_round_trip_continua_publicavel` |
+| **R3C3B1-02** | la lettura passava per `read_to_string`: un corrente corrotto nella **codifica** bloccava `observar`, `candidatos`, `ler` e `recuperar`, che non arrivava nemmeno a confrontare lo stato atteso | i quattro percorsi davano `falha de io em ler ...: stream did not contain valid UTF-8` | acquisizione dei byte (`ler_bytes`) separata dall'interpretazione. `desserializar_bytes` e `ErroArquivo::NaoUtf8 { posicao }` sono errori di **contenuto**; `observar` risponde `Corrente { sha256_bytes, token: None }`; `candidatos` elenca il candidato come invalido e continua con gli altri; il recupero promuove i **byte** del candidato e conserva i byte corrotti come prova. Nessuna conversione con perdita | `r2_observar_corrente_nao_utf8_da_impressao_dos_bytes`, `r2_ler_e_publicar_nomeiam_o_corrente_nao_utf8`, `r2_candidatos_elenca_os_outros_mesmo_com_residuo_nao_utf8`, `r2_recuperar_de_corrente_nao_utf8_conserva_a_prova_byte_a_byte`, `r2_estado_mudou_se_os_bytes_corrompidos_mudam`, `r2_desserializar_bytes_nomeia_o_nao_utf8`, `r2_impressao_dos_bytes_existe_mesmo_sem_texto` |
+| **R3C3B1-03** | l'unicità di `lote.id` era imposta soltanto da `Arquivo::acrescentar_lote`, ma il modello è pubblico e il lettore non passa per quel costruttore. Due esecuzioni con lo stesso ID davano due identità del piano per lo stesso lotto e un riferimento ambiguo | `verificar_estrutura` restituiva `Ok(())` sul duplicato identico e su quello con `plano.versao` diversa, nelle due permutazioni, sia dal modello sia da JSON | `verificar_estrutura` impone l'unicità con `ExecucaoConflitante`, lo stesso errore del costruttore. **Non** si deduplica scegliendo la prima o l'ultima: sarebbe una scelta inventata su dati contabili | `r3_execucao_duplicada_e_rejeitada_pelo_validador` |
+| **R3C3B1-04** | `resumo` tagliava a 120 **byte**, che possono cadere dentro un carattere: la funzione che deve **riportare** `HistoriaTruncada` andava in panico | panico `end byte index 120 is not a char boundary; it is inside 'é'` in 2 casi su 4 prefissi, con `é`; riprodotto anche con `€` e `𝄞` | abbreviazione sul più grande confine di carattere non oltre il limite | `r4_diagnostico_de_historia_truncada_nao_corta_caractere_a_meio` (18 casi: tre lunghezze di carattere × sei prefissi), `r4_resumo_abrevia_em_confins_de_caractere` |
+
+**Un contratto nuovo e uno chiarito.** `PER-04` (un solo `lote.id` per
+esecuzione) e `PER-09` (l'impronta dei byte esiste anche senza testo
+interpretabile) erano impliciti nella specifica e ora sono imposti nel codice e
+provati. `PER-17` resta lo stesso contratto, con il confronto corretto.
+
+**Che cosa le correzioni non hanno cambiato.** Il formato dei byte è
+identico: lo stesso archivio di prova dà ancora 10557 byte e
+`fb8715049c07538b393665d7bfa621f296141259c9e0fbf737b559cb35dc6a05`, verificato
+di nuovo con `Get-FileHash` dopo le correzioni. Le sei fonti canoniche sono
+invariate. Le 267 prove precedenti al lotto restano verdi senza modifiche.
+
+**Conteggio dopo le correzioni**: 337 test, 319 unitari nella lib, 3 nel
+binario, 15 di integrazione. Dei 70 nuovi, 13 sono le regressioni dei quattro
+riscontri.
+
+**Una premessa registrata dall'audit, non un riscontro.** Un contesto con il
+CNPJ della riga diverso da quello del documento supera `verificar_estrutura` e
+conserva l'impronta, ma `construir_pre_livro` lo rifiuta con
+`DocumentoIncoerente`. Il validatore archivistico **non** attesta tutti gli
+invarianti della 3C.2, e la barriera del pre-libro va mantenuta nella
+composizione futura: sono due controlli con responsabilità diverse, e l'uno non
+sostituisce l'altro.
+
+**Nota d'ambiente.** I test di IO lavorano in arene sotto la temporanea di
+sistema (`%TEMP%\fantozzi_3c3b1\`), una per test, e non cancellano nulla fuori
+da quella. Un `TEMP` non scrivibile li fa fallire con `PermissionDenied` sul
+`rename` senza che ci sia nulla di sbagliato nel codice: è quanto è capitato al
+primo tentativo dell'audit.
+
+### 18.8 Audit mirato del 2026-10-22: superato
+
+Codex ha verificato le quattro correzioni su un crate **esterno** con
+dipendenza di percorso al progetto reale, compilato `--offline`, e ha letto i
+punti corretti nel codice.
+
+| Riscontro | Esito dell'audit mirato |
+|---|---|
+| R3C3B1-01 | **CHIUSO**. Verificato anche attraverso `publicar`: corrente invariato byte per byte, nessun temporaneo, generazione o lucchetto lasciato; un candidato identico dopo round-trip resta pubblicabile |
+| R3C3B1-02 | **CHIUSO**. Impronta e `token = None` su `FF FE 80`; un residuo non UTF-8 non blocca l'elenco della generazione valida; `EstadoMudou` senza copie né promozione; dopo una nuova osservazione il recupero conserva i byte corrotti esatti e lascia candidato e residuo intatti |
+| R3C3B1-03 | **CHIUSO**. Rifiuto con `ExecucaoConflitante` da modello e dopo deserializzazione, nelle due permutazioni; la pubblicazione iniziale rifiuta **prima** di creare file |
+| R3C3B1-04 | **CHIUSO**. Diciotto combinazioni Unicode a due, tre e quattro byte: l'API restituisce sempre `HistoriaTruncada` con diagnostica, senza bisogno di intercettare panici |
+
+Controlli dell'audit: 337 test passati, `fmt`, `clippy -D warnings` e
+`diff --check` a zero, sei fonti canoniche invariate, perimetro escluso intatto
+con `src/lib.rs` come unico tracked modificato fra sorgenti, test, `config` e
+`samples`.
+
+**Tre controprove sui byte, registrate dall'audit.**
+
+1. Per gli stessi dati sintetici, la serializzazione alla medesima revisione è
+   **identica byte per byte** a una generazione conservata **prima** delle
+   correzioni: le correzioni non hanno toccato il formato.
+2. L'impronta dei tre byte `FF FE 80` restituita da `observar` coincide con
+   `Get-FileHash`:
+   `b632bfa9c60bc17f7fd78dba311fd3f5dfa66cb8c017a4278e2bae28d668844d`. È la
+   prova indipendente che l'impronta di uno stato **non interpretabile** è
+   corretta, non solo esistente.
+3. L'archivio del test fra processi dell'audit misura 6229 byte, SHA-256
+   `158b06c76831c8586fa46356748200d4fe0e6cf426b8a325c28c0da3c8df704f`.
+
+**Precisazione sui due campioni fisici**, per non lasciare ambiguità. Sono
+contenuti diversi, con misure diverse, e nessuna impronta si trasferisce
+dall'uno all'altro:
+
+| Campione | Contenuto | Byte | SHA-256 |
+|---|---|---|---|
+| §18.5, controprova manuale | archivio di prova completo (2 snapshot, 2 dichiarazioni), pubblicato da `publicar` su una destinazione nuova | 10557 | `fb8715049c07538b393665d7bfa621f296141259c9e0fbf737b559cb35dc6a05` |
+| audit mirato, prova fra processi | archivio del test `tests/persistencia_entre_processos.rs` (1 snapshot, 2 dichiarazioni) | 6229 | `158b06c76831c8586fa46356748200d4fe0e6cf426b8a325c28c0da3c8df704f` |
+
+**Messaggi d'ambiente, non attestazioni di pulizia assoluta.** L'audit
+conserva nei log il messaggio di `rustc` sul ricorso alla copia quando gli hard
+link della cache incrementale non sono disponibili, e l'avviso di Git sulla
+futura conversione LF/CRLF. Non sono rilievi di codice e non vengono presentati
+come «assenza di qualunque warning».
+
+**Che cosa questo esito non è.** Non è un'autorizzazione a commit, push o uso
+in produzione: la registrazione in Git resta da autorizzare e da completare. I
+limiti di §18.6 restano tutti in piedi, e in particolare la barriera di
+`construir_pre_livro` va mantenuta nella composizione futura, perché il
+validatore archivistico non attesta gli invarianti della 3C.2.
