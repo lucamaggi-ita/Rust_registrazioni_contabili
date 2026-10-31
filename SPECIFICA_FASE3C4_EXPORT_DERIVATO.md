@@ -692,6 +692,12 @@ vuote nelle righe `DIVERGENCIA`, tranne `tipo_linha`.
 `plano_arquivado_sha256` è un `Option<String>`: assente vuol dire cella vuota, e
 la sua assenza è un dato di `IdentidadePlano`, non un errore.
 
+Dalla fase 3C.5.a la CLI lo **riempie** con l'impronta reale del piano (`D28`,
+approvata il 2026-10-31): una cella vuota significa quindi che quell'esecuzione
+è stata scritta da un chiamante che non ha dichiarato l'impronta, non che
+l'impronta non esista. L'export non cambia: continua a mostrare il dato come
+lo trova.
+
 #### 6.3.3 Foglio `diagnostico`
 
 Una riga per riga del pre-libro, con lo stato della revisione accanto.
