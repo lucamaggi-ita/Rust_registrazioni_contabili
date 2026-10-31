@@ -5,7 +5,7 @@
 | Data | 2026-10-22 |
 | Mandato | `MANDATO_CLAUDE_FASE3C4_SPECIFICA_EXPORT_20261022.md` |
 | Perimetro | **analisi e specifica**. Nessuna riga di Rust del progetto, nessuna modifica di `Cargo.*`, nessuna installazione, nessun archivio reale, nessun commit |
-| Stato | **AUDIT DELLA SPECIFICA E DELL'IMPLEMENTAZIONE SUPERATI**. D18–D26, `EXP-29` e la divergenza nota del lettore restano le decisioni registrate. Il controllo finale del 2026-10-30 ha chiuso anche il residuo di `R3C41-04`: tutti i rilievi sono chiusi (§19.9). I precedenti esiti negativi e le correzioni restano documentati in §19.7 e §19.8. Prove su Microsoft Excel ancora **NON_ESEGUITE**; registrazione locale autorizzata, nessun push autorizzato in questo passaggio |
+| Stato | **AUDIT DELLA SPECIFICA E DELL'IMPLEMENTAZIONE SUPERATI**. D18–D26, `EXP-29` e la divergenza nota del lettore restano le decisioni registrate. Il controllo finale del 2026-10-30 ha chiuso anche il residuo di `R3C41-04`: tutti i rilievi sono chiusi (§19.9). I precedenti esiti negativi e le correzioni restano documentati in §19.7 e §19.8. Prove su Microsoft Excel ancora **NON_ESEGUITE**; registrazione locale autorizzata, nessun push autorizzato in questo passaggio La prova visiva di `TX-18` ha fatto emergere `R3C41-05`, una fonte sbagliata per `diagnostico.status_tecnico`, corretta in §19.10 e **chiusa** dal controllo mirato del 2026-10-30 (§19.10.1). Registrazione della correzione e **pubblicazione dei tre commit** autorizzate da Luca il 2026-10-30 ed eseguite; `TX-18` parziale, `TX-19` non eseguita, fase 3C **non chiusa** |
 | Revisione 2 | correzione dei cinque riscontri dell'audit del 2026-10-23, con tre riproduzioni sul codice reale in §5.4. Contratti nuovi `EXP-30…EXP-45`, prove nuove `TX-29…TX-36`, proposta nuova D24 |
 | Revisione 3 | correzione dei due residui dell'audit mirato del 2026-10-23, riprodotti in §5.5: autore dell'approvazione attiva e confronto dei nomi riservati. Contratti nuovi `EXP-46…EXP-50`, prove nuove `TX-34b`, `TX-21` e `TX-33` estesi. Quattro allineamenti accolti: §18.2 |
 | Revisione 4 | precisazione recepita dall'esito finale: il file a zero byte viene dalla **rivendicazione** (`EXP-43`), non dal lucchetto (`EXP-44`). L'alternativa già descritta in §8.2 ha ora un nome proprio, **D25**, e le due scelte sono indipendenti: §18.3 |
@@ -17,6 +17,8 @@
 | Revisione 10 | correzione dei quattro rilievi dell'audit indipendente del lotto 3C.4.1, del 2026-10-30, ognuno riprodotto prima di essere corretto: §19.7. §7.4.1.1.1 nuova registra due divergenze del lettore che il campionamento non guardava, di **due cause distinte**. §6.3.9 concorda col proprio elenco, e il conteggio dei pacchetti è corretto in `README.md` e nel mandato. Corretti anche due difetti dell'intestazione già presenti in `9d99832`: un frammento di riga incollato davanti al titolo e la riga `Stato` senza barra di chiusura |
 | Revisione 11 | chiuso il residuo del controllo mirato del 2026-10-30: un'eccezione per una divergenza nota veniva concessa sul solo risultato del lettore, e un file alterato passava come limite dichiarato. §7.4.1.1.2 nuova dà la lettura operativa di `EXP-54` ed `EXP-56` con le cinque condizioni, fra cui la verifica del valore **rappresentato dal pacchetto**; prova permanente in `script/controprova_rilettura.py`. Esito e misure in §19.8. Nessuna decisione nuova, codice Rust invariato |
 | Revisione 12 | esito finale del controllo indipendente sul confine di verifica: **superato**, tutti i rilievi R3C41-01..04 chiusi. Registrazione nei due gruppi autorizzata da Luca il 2026-10-30. Solo aggiornamento dello stato e appendice §19.9; nessuna modifica ai contratti o al codice |
+| Revisione 13 | `R3C41-05`, trovato dalla prova visiva di `TX-18`: la cella `diagnostico.status_tecnico` veniva riempita dalla copia proiettata per il pre-libro, e un'approvazione umana mascherava un `REVISAR` tecnico. §6.3.3 nomina ora la fonte di ciascuna delle tre colonne di stato; tre regressioni, tre attese esplicite nella rilettura e una mutazione nuova nella controprova. Misure in §19.10. Schema invariato, nucleo contabile non toccato |
+| Revisione 14 | esito del controllo mirato su `R3C41-05`: **chiuso** nel perimetro, con le provenienze delle prove tenute distinte. §19.10.1 registra anche perche' il SHA del campione identifichi una **copia** e non il contenuto: `proveniencia.arquivo_caminho` porta l'arena del test, quindi due esecuzioni danno due SHA, come `D23` ed `EXP-25` prevedono. Nessuna modifica al codice |
 | HEAD alla stesura | `af5683d4522166d5283fdd1f206c91cb3e841dac` |
 | Baseline tecnica | **[RIUSATA]** dal lotto 3C.3.b.1: 337 test (319 lib, 3 binario, 15 integrazione), `fmt`/`clippy`/`diff --check` puliti. Non rieseguita: questo lotto produce solo Markdown |
 | Decisioni approvate dal mandato | **D11(a)** import dello storico Excel rinviato; **D12(a)** importo non interpretabile → riga `INCOMPLETO` con testo originale e motivo |
@@ -730,6 +732,26 @@ Tipi: `ordinal`, `valor_numero`, `decisoes_aplicadas`, `anotacoes_aplicadas`
 sono `N`; `data_documento` e `data_pagamento` sono `D`;
 `empresa_identificada`, `no_extrato_aprovado`, `no_extrato_revisado` sono `B`;
 tutto il resto è `T`.
+
+**Le tre colonne di stato hanno tre fonti diverse, e qui si nominano.**
+`R3C41-05` nasce da una fonte sbagliata per la prima: «senza confonderli» era
+scritto, ma non era scritto *da dove* viene ciascuna.
+
+| Colonna | Fonte | Chi la cambia |
+|---|---|---|
+| `status_tecnico` | `LinhaRevisada::status_tecnico` | solo una nuova allocazione della 3B. Nessuna decisione umana la riscrive |
+| `estado_revisao` | `LinhaRevisada::estado` | è **derivata** dall'esito tecnico e dalle decisioni applicate |
+| `particao` | `LinhaPreLivro::particao` | il pre-libro **proiettato**, che riflette le decisioni |
+
+`Lancamento::status_revisao` **non** è una fonte di questo foglio: è la copia
+che la 3C.3 proietta per costruire il pre-libro, e un'approvazione la porta a
+`APROVADO`. Usarla per `status_tecnico` confondeva due delle tre nozioni che
+`F3C-29` separa, e in un caso **mascherava** un `REVISAR` tecnico dietro
+un'approvazione umana.
+
+Riga del pre-libro senza riga corrispondente nella vista: `status_tecnico` è
+una **cella vuota**, come `estado_revisao` accanto. Il dato tecnico non si
+deduce da una proiezione, e un'assenza non è uno stato.
 
 #### 6.3.4 Foglio `rate`
 
@@ -2658,3 +2680,113 @@ si aggiornano soltanto le etichette documentali e la continuita' nel mandato.
 TX-18 e TX-19 restano NON_ESEGUITE. La verifica in Microsoft Excel del
 campione sintetico e' il passo operativo successivo; l'audit non avvia CLI,
 DRE o produzione contabile e non rimuove gli altri limiti dichiarati.
+
+### 19.10 `R3C41-05`: la fonte sbagliata per `status_tecnico` (2026-10-30)
+
+Trovato dalla **prova visiva** di `TX-18`, sul print del foglio `diagnostico`
+mostrato a Luca: `Z2` portava `APROVADO` dove l'esito tecnico del campione è
+`OK`. Né il mio audit interno né i controlli precedenti l'avevano visto,
+perché nessuna prova confrontava quella colonna con la sua fonte: il manifesto
+nasce dal modello, e il modello sbagliava.
+
+| Voce | Valore |
+|---|---|
+| Classificazione | MICRO, P2: correzione di un contratto **già** deciso (`F3C-29`), nessuna decisione funzionale nuova |
+| Difetto | `src/export.rs`: la cella `status_tecnico` era riempita da `lancamento.status_revisao`, cioè dalla copia che la 3C.3 **proietta** per il pre-libro, dove un'approvazione diventa `APROVADO` |
+| Fonte corretta | `LinhaRevisada::status_tecnico`, l'esito della 3B che nessuna decisione riscrive. Era già disponibile nella vista ricevuta |
+| Gravità reale | oltre all'etichetta sbagliata, un `REVISAR` tecnico veniva **mascherato** da un'approvazione umana: l'export nascondeva l'esigenza di revisione |
+| Schema | invariato: nessuna colonna rinominata, nessuna aggiunta |
+| Nucleo contabile | non toccato: proiezione, calcoli, archivio e decisioni restano come sono |
+
+**Riproduzione, prima della correzione.** Tre regressioni scritte contro il
+contratto, non contro il codice: hanno fallito tutte e tre.
+
+| Regressione | Osservato prima | Atteso e ora ottenuto |
+|---|---|---|
+| `r5_status_tecnico_ok_non_diventa_aprovado` | `APROVADO` | `OK`, con `estado_revisao = APROVADO_POR_PESSOA` e `particao = APROVADO` |
+| `r5_status_tecnico_revisar_resta_revisar_dopo_approvazione` | `APROVADO` | `REVISAR`: la persona accetta la riga, non cambia l'esito dell'allocazione |
+| `r5_senza_eventi_il_tecnico_e_lo_stato_concordano` | `TECNICO_OK` atteso da me come `OK` | `status_tecnico = OK`, `estado_revisao = TECNICO_OK` |
+
+La terza attesa era **mia** e sbagliata, non un difetto del codice: lo stato
+della vista ha un nome proprio, `TECNICO_OK`, e il codice lo scriveva già
+bene. Corretta l'attesa; la distinzione fra i due nomi è esattamente ciò che
+il riscontro riguarda.
+
+**Correzione.** `src/export.rs`, foglio `diagnostico`:
+
+```rust
+celulas.push(match revisada {
+    Some(r) => Celula::texto(etiqueta(&r.status_tecnico, "StatusRevisao")?),
+    None => Celula::Vazia,
+});
+```
+
+Riga del pre-libro assente dalla vista: cella **vuota**, come `estado_revisao`
+accanto. Il dato tecnico non si deduce da una proiezione.
+
+**Prove aggiunte oltre alle tre regressioni.**
+
+| Prova | Contenuto |
+|---|---|
+| attese esplicite della rilettura | `diagnostico.status_tecnico = OK`, `estado_revisao = APROVADO_POR_PESSOA`, `particao = APROVADO`: i tre valori di `Z2`, `AA2` e `AB2` del print |
+| controprova del confine | mutazione nuova `stato_tecnico`: `status_tecnico` portato a `APROVADO` nel workbook → uscita **1**, cella nominata. È la firma esatta del difetto corretto |
+
+**Campione rigenerato e riverificato.** Il manifesto e il workbook depositati
+dai test ora portano `Z2 = OK`, `AA2 = APROVADO_POR_PESSOA`, `AB2 =
+APROVADO`. Importo, quadrature e inclusione nell'estratto invariati: `V2 =
+10.00`, `W2 = 10`, `no_extrato_revisado = SIM`.
+
+**Verifiche.** `cargo test --locked` **389** verdi (367 lib, 3 binario, 19
+integrazione); `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D
+warnings`, `git diff --check` puliti. Rilettura: `tx38` uscita 0, `export` 411
+celle e **998** confronti con 5 divergenze note e 0 discordanze, uscita 0,
+senza manifesto uscita 2. Controprova: dodici casi, tutti conformi.
+
+`TX-18` resta **in corso** e `TX-19` **NON_ESEGUITA**: questo riscontro viene
+dalla prova visiva e la chiude solo per le celle guardate.
+
+#### 19.10.1 Esito del controllo mirato, e il SHA del campione
+
+**`R3C41-05` chiuso tecnicamente** dal controllo mirato di Codex del
+2026-10-30: la fonte è `LinhaRevisada::status_tecnico`, approvazione e
+partizione conservano fonti separate, la riga assente dalla vista dà una cella
+vuota, e l'unica modifica produttiva nel diff è quella scelta di fonte.
+
+Le provenienze delle prove restano **distinte**, e non si sommano:
+
+| Prova | Chi l'ha eseguita |
+|---|---|
+| `export::tests::r5_` (3), deposito del campione (1), rilettura `export` (998 confronti), controprova (12 casi), `git diff --check` | Codex, sul codice corretto |
+| suite completa di **389** test, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, ricompilazione da cache fredda, rilettura `tx38`, modo `export` senza manifesto | Claude, attestazioni della consegna, **non** rieseguite da Codex in questo controllo MICRO |
+
+**Il SHA del campione identifica una copia, non il contenuto.** Codex ha
+pubblicato `a564523632dd93b7cb89541d75c2a66f391acc128464da69f58b10df8d5e0c40`
+per `EXPORT_PROVA_3C41_CORRETTO_R5.xlsx`. Verificato: il workbook depositato in
+`%TEMP%\fantozzi_3c41\` ha **esattamente** quel SHA, quindi la copia per i
+print è il file prodotto dal codice corretto.
+
+Ma quel SHA **non si conserva** fra esecuzioni, e non è un difetto: il foglio
+`proveniencia` porta `arquivo_caminho`, che contiene l'arena del test con
+l'identificativo del processo. La mia esecuzione precedente dello stesso test
+aveva dato `f1b077a29c3f1e634507e47a78377c3d928e8235a7a2cccd76318621426a50ba`
+con `…\deposito_<pid mio>\arquivo.json`; quella di Codex dà
+`a5645236…` con `…\deposito_17812\arquivo.json`. Due SHA, lo stesso contenuto
+tranne quella cella.
+
+È `D23` applicata: il determinismo promesso è quello dei **contenuti e
+dell'ordine**, non dei byte dello ZIP, e `EXP-25` lo misura ripetendo la
+derivazione sugli **stessi** ingressi — `tx20_duas_derivacoes_dao_o_mesmo_conteudo`.
+Chi confronta due SHA di due esecuzioni diverse non sta misurando il
+determinismo: sta misurando il percorso dell'arena. Il SHA pubblicato va usato
+per verificare **quella copia**, non per decidere se una rigenerazione è
+corretta.
+
+**Registrazione e pubblicazione.** L'audit non le autorizzava; Luca le ha
+autorizzate il 2026-10-30, scegliendo i due commit tematici e la pubblicazione
+dei tre commit locali. Eseguite con staging nominativo, senza `git add .` e
+senza commit misti.
+
+**Che cosa resta aperto.** `TX-18` resta parziale: la prova visiva ha guardato
+`V2`, `W2`, lo stato della colonna numerica, le due stringhe ostili e, dopo la
+correzione, `Z2`, `AA2` e `AB2`. `TX-19` resta **NON_ESEGUITA**, e la fase 3C
+**non** è chiusa: CLI 3C.5, DRE 3D e la promozione contabile non sono avviati.

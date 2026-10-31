@@ -656,3 +656,151 @@ separata: non e' stata aggiunta durante questa registrazione.
 
 Gli SHA e lo stato corrente dei commit si leggono da Git, senza creare un
 ciclo di commit per riscrivere nel documento il suo stesso identificativo.
+
+---
+
+## 18. Appendice di esito — `R3C41-05`, fonte di `status_tecnico` (2026-10-30)
+
+| Voce | Valore |
+|---|---|
+| Origine del riscontro | la **prova visiva** di `TX-18`: il print del foglio `diagnostico` mostrato a Luca, `Z2 = APROVADO` dove l'esito tecnico del campione è `OK` |
+| Classificazione | MICRO, P2: correzione di un contratto già deciso (`F3C-29`). Nessuna decisione funzionale nuova, nessuna nuova fase |
+| Perimetro toccato | `src/export.rs` (una fonte), le sue regressioni, le attese della rilettura, la controprova, e le appendici. **Nessuna** modifica al nucleo contabile, allo schema, alle dipendenze o ai contratti |
+| Stato | **CHIUSO** dal controllo mirato del 2026-10-30: §19. Registrazione e pubblicazione non autorizzate |
+| Dettaglio | §19.10 della specifica per le misure, §6.3.3 per il contratto ora esplicito |
+| Git | nessun commit, nessun push. I due commit locali restano `f6aeb3d` e `f89e702` |
+
+### 18.1 Il difetto, riprodotto prima della correzione
+
+`diagnostico.status_tecnico` era riempita da `lancamento.status_revisao`, cioè
+dalla copia che la 3C.3 **proietta** per costruire il pre-libro, dove
+un'approvazione diventa `APROVADO`. La fonte corretta,
+`LinhaRevisada::status_tecnico`, era già nella vista ricevuta.
+
+Tre regressioni scritte contro il contratto hanno fallito tutte e tre:
+`OK` compariva come `APROVADO`, e — il caso che conta — un `REVISAR` tecnico
+veniva **mascherato** da un'approvazione umana, nascondendo nell'export
+l'esigenza di revisione.
+
+Una delle tre attese era **mia** e sbagliata: lo stato della vista senza eventi
+si chiama `TECNICO_OK`, non `OK`, e il codice lo scriveva già bene. Corretta
+l'attesa, non il codice.
+
+### 18.2 Che cosa è stato aggiunto
+
+| Prova | Contenuto |
+|---|---|
+| `r5_status_tecnico_ok_non_diventa_aprovado` | tecnico `OK` + approvazione → `OK`, `APROVADO_POR_PESSOA`, `APROVADO`, importo e inclusione invariati |
+| `r5_status_tecnico_revisar_resta_revisar_dopo_approvazione` | tecnico `REVISAR` + approvazione → il tecnico resta `REVISAR` |
+| `r5_senza_eventi_il_tecnico_e_lo_stato_concordano` | senza eventi: `OK` e `TECNICO_OK`, perché la fonte non sia costante per caso |
+| attese esplicite della rilettura | `status_tecnico = OK`, `estado_revisao = APROVADO_POR_PESSOA`, `particao = APROVADO`: `Z2`, `AA2`, `AB2` del print |
+| controprova del confine | mutazione `stato_tecnico`: `APROVADO` nel workbook → uscita 1 con la cella nominata |
+
+### 18.3 Esito nel campione
+
+`Z2 = OK`, `AA2 = APROVADO_POR_PESSOA`, `AB2 = APROVADO`, con `V2 = 10.00`,
+`W2 = 10` e `no_extrato_revisado = SIM`: importo, quadrature e inclusione
+nell'estratto non cambiano. Campione e manifesto rigenerati dai test.
+
+### 18.4 Verifiche
+
+| Controllo | Esito |
+|---|---|
+| `cargo test --locked` | **389** verdi: 367 lib, 3 binario, 19 integrazione. Nessun test preesistente ha dovuto cambiare |
+| `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check` | puliti |
+| Rilettura `tx38` | uscita 0 |
+| Rilettura `export` | 411 celle, **998** confronti, 5 divergenze note, 0 discordanze, uscita 0 |
+| Rilettura `export` senza manifesto | uscita 2 |
+| Controprova del confine | dodici casi, tutti conformi |
+
+### 18.5 Stato Git
+
+| File | Origine/mandato | Stato | Destino |
+|---|---|---|---|
+| `src/export.rs` | `R3C41-05` | modificato: una fonte, tre regressioni, un helper di test | **gruppo codice**, dopo il controllo e l'autorizzazione |
+| `script/releitura_export.py` | `R3C41-05` punto 5 | modificato: tre attese esplicite | gruppo codice |
+| `script/controprova_rilettura.py` | `R3C41-05` | modificato: mutazione `stato_tecnico` | gruppo codice |
+| `README.md` | conteggi reali | modificato: 389 test, 998 confronti | gruppo codice |
+| `SPECIFICA_FASE3C4_EXPORT_DERIVATO.md` | §6.3.3, §19.10, revisione 13, stato | modificato | **gruppo documentale** |
+| questo mandato | continuità, §18 | modificato | gruppo documentale |
+
+Gli altri file del lotto sono già registrati in `f6aeb3d` e `f89e702` e non
+sono stati toccati. Nessun file tracciato modificato resta non classificato.
+Nessun `add`, commit, push, reset, restore, checkout, clean, stash, amend o
+rebase.
+
+### 18.6 Limiti
+
+`TX-18` resta **in corso**: la prova visiva ha confermato `V2`, `W2`, lo stato
+della colonna numerica e le due stringhe ostili del campione piccolo, e ha
+fatto emergere questo riscontro; le altre celle non sono state guardate.
+`TX-19` resta **NON_ESEGUITA**. Gli altri limiti dichiarati — ZIP64, volumi
+reali, hard link, altri lettori, durabilità — restano tali.
+
+---
+
+## 19. Esito del controllo mirato su `R3C41-05` (2026-10-30)
+
+**Chiuso nel perimetro mirato.** Codex ha verificato la fonte, le tre
+regressioni, il campione rigenerato, i 998 confronti della rilettura e i dodici
+casi della controprova, con `git diff --check` pulito. Nessuna modifica
+richiesta al codice.
+
+Le provenienze restano distinte: la suite completa di **389** test, `fmt`,
+`clippy` e la ricompilazione da cache fredda sono attestazioni della mia
+consegna, non rieseguite da Codex in questo controllo MICRO.
+
+**Il SHA del campione.** `a5645236…` pubblicato per
+`EXPORT_PROVA_3C41_CORRETTO_R5.xlsx` coincide con il workbook depositato in
+`%TEMP%\fantozzi_3c41\`: la copia per i print viene dal codice corretto.
+Quel SHA identifica però **quella copia** e non il contenuto: il foglio
+`proveniencia` porta `arquivo_caminho`, che contiene l'arena del test con
+l'identificativo del processo, quindi due esecuzioni danno due SHA — la mia
+dava `f1b077a2…`. È `D23`: determinismo dei contenuti e dell'ordine, non dei
+byte dello ZIP. Dettaglio in §19.10.1 della specifica.
+
+### 19.1 Che cosa resta da autorizzare
+
+| Voce | Stato |
+|---|---|
+| registrazione della correzione `R3C41-05` nei due gruppi | **autorizzata da Luca il 2026-10-30** ed eseguita: §20 |
+| pubblicazione dei commit locali | **autorizzata da Luca il 2026-10-30** ed eseguita: §20 |
+| `TX-18`, prova visiva in Microsoft Excel | **parziale**: confermate `V2`, `W2`, lo stato della colonna numerica, le due stringhe ostili e, dopo la correzione, `Z2`/`AA2`/`AB2`. Le altre celle non sono state guardate. Per i prossimi print va usata la copia nuova: un workbook già aperto in Excel non si aggiorna da sé |
+| `TX-19`, decodifica di `_xHHHH_` in Excel | **NON_ESEGUITA** |
+| fase 3C | **non chiusa**. CLI 3C.5, DRE 3D e la promozione contabile non sono avviati |
+| regola `.gitignore` per `__pycache__` | proposta, non applicata: pulizia separata |
+
+Gli altri limiti dichiarati — ZIP64, volumi reali, hard link, durabilità, altri
+lettori — restano tali e nessuna nuova deroga è stata aggiunta.
+
+---
+
+## 20. Registrazione e pubblicazione autorizzate (2026-10-30)
+
+**Autorizzazione:** Luca, alla domanda sui sei file modificati di `R3C41-05`,
+ha scelto «due commit e push dei tre». Autorizza quindi la registrazione nei
+due gruppi tematici **e** la pubblicazione dei commit locali, che l'audit di
+Codex lasciava esplicitamente fuori dal proprio perimetro.
+
+**Procedura seguita**, come le regole di lavoro richiedono:
+
+| Passo | Contenuto |
+|---|---|
+| prima | `git status -sb`, `git diff --name-status`, `git diff --cached --name-status` |
+| staging | **nominativo**, file per file. Nessun `git add .` |
+| gruppo codice | `src/export.rs`, `script/releitura_export.py`, `script/controprova_rilettura.py`, `README.md` |
+| gruppo documentale | `SPECIFICA_FASE3C4_EXPORT_DERIVATO.md`, questo mandato |
+| dopo ogni commit | `git status -sb` e indice controllati |
+| pubblicazione | `git push` del ramo `main`, senza forzature |
+
+Nessun commit misto, nessun reset, restore, checkout, clean, stash, amend,
+rebase o riscrittura di storia. Gli SHA si leggono da Git: non vengono
+ricopiati qui, per non aprire un ciclo di commit che riscriva il proprio
+identificativo.
+
+**Che cosa questa pubblicazione non dichiara.** `TX-18` resta parziale e
+`TX-19` **NON_ESEGUITA**: la compatibilità con Microsoft Excel non si dichiara
+stabile. La fase 3C **non** è chiusa; CLI 3C.5, DRE 3D e la promozione
+contabile non sono avviati. Restano in piedi i limiti dichiarati nel foglio
+`limites` e in §19.6 della specifica, comprese le due divergenze note del
+lettore.
