@@ -151,11 +151,48 @@ MASCHERATE_PERCURSO_CLI = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Modo `percurso-cli-revisado` (fase 3C.5.b)
+# ---------------------------------------------------------------------------
+#
+# Qui le decisioni **esistono**, quindi le alterazioni che contano sono quelle
+# che fingono una decisione mai dichiarata o la attribuiscono a un altro.
+MUTAZIONI_PERCURSO_CLI_REVISADO = [
+    # Un importo.
+    ("valor", "diagnostico", 4, "valor", "99.00"),
+    # Un'approvazione **mai dichiarata**, su una riga che nessuno ha approvato.
+    ("aprovacao_inventada", "diagnostico", 2, "estado_revisao", "APROVADO_POR_PESSOA"),
+    # L'approvazione attribuita a un altro: l'autore e' una dichiarazione, e
+    # cambiarlo nel file e' falsificarla.
+    ("autor_trocado", "extrato_revisado", 2, "aprovado_por", "Outra Pessoa"),
+    ("autor_da_decisao", "decisoes", 2, "autor", "Eve"),
+    # La decisione cancellata dall'estratto revisionato.
+    ("estado_apagado", "extrato_revisado", 2, "estado_revisao", "TECNICO_OK"),
+]
+
+# Come negli altri modi del workbook, la frase del foglio `limites`.
+MASCHERATE_PERCURSO_CLI_REVISADO = [
+    (
+        "mascherata_escape",
+        "limites",
+        5,
+        "descricao",
+        toglie_un_livello_di_protezione,
+        "limites!5:descricao",
+    ),
+]
+
+
 def tabelle_do_modo(modo: str):
     """Mutazioni e mascherate **di questo modo**: le celle di un percorso non
     esistono necessariamente nell'altro."""
     if modo == "percurso-cli":
         return MUTAZIONI_PERCURSO_CLI, MASCHERATE_PERCURSO_CLI
+    if modo == "percurso-cli-revisado":
+        return (
+            MUTAZIONI_PERCURSO_CLI_REVISADO,
+            MASCHERATE_PERCURSO_CLI_REVISADO,
+        )
     return MUTAZIONI, MASCHERATE
 
 
@@ -357,13 +394,15 @@ def main() -> int:
     )
     analizzatore.add_argument(
         "--modo",
-        choices=["export", "percurso-cli"],
+        choices=["export", "percurso-cli", "percurso-cli-revisado"],
         default="export",
         help=(
             "quale percorso si controprova. `export` e' la fixture 3C.4.1 con "
             "le sue due approvazioni; `percurso-cli` e' il workbook che la CLI "
-            "produce da una cartella di NF-e, e vuole --workbook e --manifesto "
-            "del suo deposito"
+            "produce da una cartella di NF-e, senza nessuna approvazione; "
+            "`percurso-cli-revisado` e' lo stesso workbook dopo una "
+            "dichiarazione di revisione. Gli ultimi due vogliono --workbook e "
+            "--manifesto del loro deposito"
         ),
     )
     argomenti = analizzatore.parse_args()

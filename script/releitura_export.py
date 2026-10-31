@@ -18,13 +18,17 @@ Uso:
     py -I script/releitura_export.py <percorso.xlsx> --modo tx38
     py -I script/releitura_export.py <percorso.xlsx> --modo export \
         --manifesto <percorso.manifesto.json>
-    py -I script/releitura_export.py <percorso.xlsx> --modo percurso-cli \n        --manifesto <percorso.manifesto.json>
+    py -I script/releitura_export.py <percorso.xlsx> --modo percurso-cli \
+        --manifesto <percorso.manifesto.json>
+    py -I script/releitura_export.py <percorso.xlsx> --modo percurso-cli-revisado \
+        --manifesto <percorso.manifesto.json>
 
-I modi `export` e `percurso-cli` fanno gli stessi confronti sul file e
+I tre modi del workbook fanno gli stessi confronti sul file e
 hanno attese **diverse**: il primo e' la fixture del percorso 3C.4.1, con
 le sue due approvazioni; il secondo e' il workbook che la CLI della fase
 3C.5.a produce da una cartella di NF-e reali, dove nessuna approvazione
-esiste.
+esiste; il terzo e' lo stesso workbook rigenerato dopo una dichiarazione della
+fase 3C.5.b, dove una approvazione esiste.
 """
 
 from __future__ import annotations
@@ -387,15 +391,81 @@ INDICADORES_PERCURSO_CLI: dict[str, tuple[str, float]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Modo `percurso-cli-revisado` (fase 3C.5.b): con una decisione umana
+# ---------------------------------------------------------------------------
+#
+# `percurso-cli` attende **zero** approvazioni: fogli `decisoes`,
+# `extrato_revisado` e `avisos` senza righe di dati. Un workbook rigenerato
+# dopo una dichiarazione ne ha una, quindi non puo' essere validato da quel
+# modo, e le sue attese non si allentano per farlo passare: questo modo ha le
+# **sue**.
+#
+# Valori **misurati** sul deposito di `tests/cli_revisao_nfe.rs` (`tx80`): due
+# NF-e, sei righe, e una sola approvazione sulla riga `2.01.004` del primo
+# documento.
+ATTESE_PERCURSO_CLI_REVISADO: list[tuple[str, int, str, object, str]] = [
+    ("proveniencia", 2, "formato", FORMATO_ATTESO, "s"),
+    ("proveniencia", 2, "lote_id", "maio-r1", "s"),
+    ("proveniencia", 2, "plano_coincide", "SIM", "s"),
+    ("proveniencia", 2, "apresentacao_divergente", "NAO", "s"),
+    # Una dichiarazione, applicata, e nessuna rimasta fuori.
+    ("proveniencia", 2, "eventos_no_arquivo", 1, "n"),
+    ("proveniencia", 2, "eventos_aplicados", 1, "n"),
+    ("proveniencia", 2, "eventos_nao_aplicados", 0, "n"),
+    # I tre stati della riga approvata, con le tre fonti distinte
+    # (`R3C41-05`): il tecnico resta OK, la decisione e' umana, la partizione
+    # segue, e la riga entra nell'estratto revisionato.
+    ("diagnostico", 4, "conta_id", "2.01.004", "s"),
+    ("diagnostico", 4, "valor", "10.00", "s"),
+    ("diagnostico", 4, "status_tecnico", "OK", "s"),
+    ("diagnostico", 4, "estado_revisao", "APROVADO_POR_PESSOA", "s"),
+    ("diagnostico", 4, "particao", "APROVADO", "s"),
+    ("diagnostico", 4, "no_extrato_revisado", "SIM", "s"),
+    # Una riga **non** approvata resta fuori: la decisione non si propaga.
+    ("diagnostico", 2, "estado_revisao", "TECNICO_OK", "s"),
+    ("diagnostico", 2, "no_extrato_revisado", "NAO", "s"),
+    # L'estratto revisionato e la decisione, con l'autore dichiarato.
+    ("extrato_revisado", 2, "conta_id", "2.01.004", "s"),
+    ("extrato_revisado", 2, "estado_revisao", "APROVADO_POR_PESSOA", "s"),
+    ("extrato_revisado", 2, "aprovado_por", "Luca Maggi", "s"),
+    ("decisoes", 2, "operacao", "APROVAR", "s"),
+    ("decisoes", 2, "autor", "Luca Maggi", "s"),
+    ("decisoes", 2, "motivo", "conferido com a nota em papel", "s"),
+    ("decisoes", 2, "repeticoes", 0, "n"),
+]
+
+# Due NF-e da tre articoli: sei righe, 70.00 in tutto, e **una** approvata.
+INDICADORES_PERCURSO_CLI_REVISADO: dict[str, tuple[str, float]] = {
+    "documentos": ("2", 2.0),
+    "documentos_ok": ("2", 2.0),
+    "linhas": ("6", 6.0),
+    "linhas_aprovado": ("1", 1.0),
+    "linhas_ok": ("5", 5.0),
+    "linhas_revisar": ("0", 0.0),
+    "valor_total": ("70.00", 70.0),
+    "valor_aprovado": ("10.00", 10.0),
+    "valor_ok": ("60.00", 60.0),
+    "valor_extrato_aprovado": ("10.00", 10.0),
+    "linhas_excluidas_do_extrato": ("5", 5.0),
+}
+
+
 def attese_do_modo(modo: str) -> list[tuple[str, int, str, object, str]]:
     """Le attese esplicite **di questo modo**, mai quelle di un altro."""
-    return ATTESE_PERCURSO_CLI if modo == "percurso-cli" else ATTESE_ESPLICITE
+    if modo == "percurso-cli":
+        return ATTESE_PERCURSO_CLI
+    if modo == "percurso-cli-revisado":
+        return ATTESE_PERCURSO_CLI_REVISADO
+    return ATTESE_ESPLICITE
 
 
 def indicadores_do_modo(modo: str) -> dict[str, tuple[str, float]]:
-    return (
-        INDICADORES_PERCURSO_CLI if modo == "percurso-cli" else INDICADORES_ATTESI
-    )
+    if modo == "percurso-cli":
+        return INDICADORES_PERCURSO_CLI
+    if modo == "percurso-cli-revisado":
+        return INDICADORES_PERCURSO_CLI_REVISADO
+    return INDICADORES_ATTESI
 
 
 def _modi_da_nota(nota: dict) -> tuple[str, ...]:
@@ -521,7 +591,7 @@ for _chiave_cr, _riga_cr in (
 DIVERGENZE_NOTE["limites!5:descricao"] = {
     # Ogni export porta questa frase identica, quindi la divergenza si
     # presenta in entrambi i percorsi.
-    "modo": ("export", "percurso-cli"),
+    "modo": ("export", "percurso-cli", "percurso-cli-revisado"),
     "cella": {"folha": "limites", "linha": 5, "coluna": "descricao"},
     "ingresso": "Um texto que contem uma sequencia semelhante a _xHHHH_ ja' protegida pode ser mostrado de forma diferente: medido com openpyxl 3.1.5, a entrada _x005F_x0041_ foi relida _x0041_. O XML produzido e' correto; a perda vem do decodificador do leitor.",
     "lettore": "openpyxl",
@@ -559,7 +629,12 @@ class Esito:
         self.xml_misurato: dict[str, str] = {}
 
     def confronta(self, nome: str, atteso: object, trovato: object) -> None:
+        # Una registrazione appartiene a un **modo**: la stessa cella puo'
+        # divergere in un percorso e non in un altro, e una registrazione di
+        # un altro modo non va ne' concessa ne' dichiarata obsoleta qui.
         nota = DIVERGENZE_NOTE.get(nome)
+        if nota is not None and self.modo not in _modi_da_nota(nota):
+            nota = None
         if atteso == trovato:
             if nota is not None:
                 self.note_viste.add(nome)
@@ -959,6 +1034,8 @@ def modo_export(
     confronto_esplicito(livro, esito)
     if esito.modo == "percurso-cli":
         confronti_do_percurso_cli(livro, esito)
+    if esito.modo == "percurso-cli-revisado":
+        confronti_do_percurso_revisado(livro, esito)
     livro.close()
 
 
@@ -994,12 +1071,43 @@ def confronti_do_percurso_cli(livro, esito: "Esito") -> None:
         )
 
 
+def confronti_do_percurso_revisado(livro, esito: "Esito") -> None:
+    """Che cosa deve mostrare **nel file** un export dopo una dichiarazione.
+
+    1. `D28`: l'impronta del piano archiviato, come nel modo senza revisioni.
+    2. Esattamente **una** riga di dati in `decisoes` e **una** in
+       `extrato_revisado`: una dichiarazione, una decisione, una riga
+       approvata. Non «almeno una»: un conteggio diverso significa che il
+       percorso ha prodotto qualcosa che nessuno ha dichiarato.
+    3. Nessun avviso: la vista non ha niente da segnalare in questo percorso.
+    """
+    print("--- confronti do percurso revisado ---")
+    prov = livro["proveniencia"]
+    cabecalho = [c.value for c in next(prov.iter_rows(min_row=1, max_row=1))]
+    impronta = prov.cell(
+        row=2, column=cabecalho.index("plano_arquivado_sha256") + 1
+    ).value
+    esito.afferma(
+        "percurso_revisado.plano_arquivado_sha256.presente",
+        isinstance(impronta, str) and bool(re.fullmatch(r"[0-9a-f]{64}", impronta)),
+        f"attesa un'impronta di 64 esadecimali, trovato {impronta!r}",
+    )
+    for nome, atteso in (("decisoes", 1), ("extrato_revisado", 1), ("avisos", 0)):
+        folha = livro[nome]
+        # `max_row` conta l'intestazione.
+        esito.afferma(
+            f"percurso_revisado.{nome}.linhas",
+            folha.max_row - 1 == atteso,
+            f"attese {atteso} righe di dati in {nome}, trovate {folha.max_row - 1}",
+        )
+
+
 def main() -> int:
     analizzatore = argparse.ArgumentParser(description=__doc__)
     analizzatore.add_argument("caminho", help="workbook da rileggere")
     analizzatore.add_argument(
         "--modo",
-        choices=["tx38", "export", "percurso-cli"],
+        choices=["tx38", "export", "percurso-cli", "percurso-cli-revisado"],
         default="tx38",
         help="insieme di confronti",
     )
@@ -1013,7 +1121,7 @@ def main() -> int:
     )
     argomenti = analizzatore.parse_args()
 
-    if argomenti.modo in ("export", "percurso-cli") and not argomenti.manifesto:
+    if argomenti.modo != "tx38" and not argomenti.manifesto:
         print(
             f"AMBIENTE: --modo {argomenti.modo} richiede --manifesto: senza "
             "le attese di ogni cella il confronto sarebbe a campione.",
@@ -1041,7 +1149,11 @@ def main() -> int:
         esito.pacote = Pacote(argomenti.caminho)
         if argomenti.modo == "tx38":
             modo_tx38(argomenti.caminho, openpyxl, esito)
-        elif argomenti.modo in ("export", "percurso-cli"):
+        elif argomenti.modo in (
+            "export",
+            "percurso-cli",
+            "percurso-cli-revisado",
+        ):
             modo_export(
                 argomenti.caminho, argomenti.manifesto, openpyxl, esito
             )

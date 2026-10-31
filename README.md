@@ -27,7 +27,8 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 | 3C.4.1 | Export XLSX derivado: modelo (`export.rs`), adaptador (`xlsx.rs`), escrita (`export_io.rs`) | **AUDIT TECNICO INDEPENDENTE SUPERADO** em 2026-10-30: R3C41-01..04 fechados, inclusive o residuo da releitura. Compatibilidade Excel continua **NON_VERIFICATO** |
 | 3C.4.2 | Adaptadores de entrada bruta (D12), import do historico (D11) | NAO_INICIADA: D11(a) e D12(a) adiaram ambos |
 | 3C.5.a | Uso pela CLI: `arquivar-nfe` (pasta -> arquivo autoritativo) e `exportar-diagnostico` (uma execucao -> XLSX) | **IMPLEMENTADA**, a aguardar audit independente. Decisoes D27-D34 aprovadas por Luca em 2026-10-31 |
-| 3C.5.b | Resto do uso pela CLI: resultado entre execucoes (D32), perfis, aprovacao declarada | NAO_INICIADA |
+| 3C.5.b | Revisao humana pela CLI: `consultar-linhas` e `declarar-revisao` (aprovar, revogar, anotar), com regeneracao do export | **IMPLEMENTADA**, a aguardar audit independente. M1-M3 aprovadas por Luca em 2026-10-31 |
+| 3C.5.c | Aprovacao multipla (um comando, varias linhas) e resultado entre execucoes (D32) | NAO_INICIADA |
 | 3D | DRE gerencial por competencia | NAO_INICIADA |
 
 Funciona de ponta a ponta: validar a configuracao, ler uma NF-e em XML,
@@ -100,6 +101,71 @@ diverso**; `5` arquivado **com reserva** (estado tecnico `PARCIAL`/`ERRO`);
 inexistente; `3` destino ja' existente com `--se-existir recusar`; `4` destino
 que coincide com o arquivo; `6` outra recusa de IO. Cada mensagem diz se o
 ficheiro final **foi** ou **nao foi** publicado.
+
+### Fase 3C.5.b: revisao humana a partir da CLI
+
+O ciclo fecha-se sem inventar nada: o Excel diagnostico leva as colunas
+`impressao_conteudo` e `impressao_apresentacao` de cada linha, e sao essas que
+um evento tem de citar.
+
+```powershell
+# 1. O que nao tem aprovacao humana activa, e o que um evento deve citar.
+cargo run -- consultar-linhas --arquivo dados/arquivo.json --lote fonte-maio-r2 --so-sem-aprovacao-humana
+
+# 2. A aprovacao. <IMPRESSAO> e <VISTA> sao os 64 hexadecimais impressos acima.
+cargo run -- declarar-revisao --arquivo dados/arquivo.json --lote fonte-maio-r2 --chave <CHAVE> --conta 2.01.004 --ordinal 0 --origem xml-nfe --operacao aprovar --autor 'Luca Maggi' --motivo 'conferido com a nota em papel' --impressao-conteudo <IMPRESSAO> --vista <VISTA>
+
+# 3. Uma anotacao, que **nao** decide o estado.
+cargo run -- declarar-revisao --arquivo dados/arquivo.json --lote fonte-maio-r2 --chave <CHAVE> --conta 2.04.001 --ordinal 2 --origem xml-nfe --operacao anotar --autor 'Luca Maggi' --motivo 'duvida sobre o rateio' --nota 'conferir com o fornecedor' --impressao-conteudo <IMPRESSAO>
+
+# 4. Regenerar: o comando da 3C.5.a, nenhum novo.
+cargo run -- exportar-diagnostico --arquivo dados/arquivo.json --lote fonte-maio-r2 --saida dados/diagnostico_maio.xlsx --se-existir substituir --operador 'Luca Maggi' --motivo 'depois das aprovacoes'
+```
+
+Apices **simples** para os literais: em PowerShell uma cadeia entre apices
+duplos interpola `$` e o acento grave, e nao e' um quoting seguro para um
+motivo escrito por uma pessoa. Uma opcao repetida e' recusada por clap com
+erro explicito, medido: nao se sobrepoe em silencio.
+
+O comando que `consultar-linhas` imprime leva **todos** os argumentos textuais
+como literais, com os apostrofos internos duplicados, e o `--plano-contas`
+**selecionado**: um caminho com espacos — `C:\Users\Recanto do Sossego\…` —
+quebrava o comando, e sem o plano a declaracao seguinte carregaria o
+predefinido (`R3C5B-I01`). A consulta mostra o nome do conto do **plano
+atual**, o nome arquivado etiquetado quando difere, e os avisos que a vista
+ja' produz, `APRESENTACAO_MUDADA` incluido: consulta e derivado dizem a mesma
+coisa do mesmo contexto (`R3C5B-I02`).
+
+`APRESENTACAO_MUDADA` nasce da comparacao entre a apresentacao **declarada** no
+evento e a actual: quem aprova sem `--vista` nao podera' ser avisado de que a
+apresentacao mudou. O comando gerado leva-a sempre.
+
+A impressao examinada **nao** e' lida do arquivo: assim `VERSAO_SUPERADA` pode
+acontecer, e a proveniencia da decisao e' real. A consulta imprime o comando
+pronto a copiar, mas gerar o comando e' uma **comodidade**: nao prova que o
+operador tenha verificado os dados.
+
+**Verifica antes de escrever.** `aplicar_revisao` nao tolera um evento
+malformado nem um par incompativel: forma, alvo ambiguo e
+`DecisoesIncompativeis` sao **erros** que fazem falhar toda a aplicacao, e o
+arquivo e' append-only. Por isso `declarar-revisao` constroi o candidato,
+identifica-o com `texto_exato_evento`, procura a repeticao entre os eventos
+**ja' arquivados**, aplica-o junto com toda a historia e publica so' se o
+candidato se aplicar. Um candidato aplicado pode **nao** mudar o estado da
+linha: uma anotacao aplica-se sem decidir nada.
+
+Codigos de saida: `0` declarado e publicado; `1` configuracao, argumentos,
+lote ou linha inexistentes; `2` a barreira recusa (forma, alvo ambiguo, par
+incompativel) e o arquivo anterior continua utilizavel; `3` o candidato nao se
+aplicaria — `ALVO_AUSENTE`, `VERSAO_SUPERADA`, `PROVENIENCIA_AUSENTE`,
+`NADA_A_REVOGAR`, `REPETICAO` —; `6` recusa de IO com os residuos nomeados.
+`consultar-linhas` sai com `0` tambem quando nenhuma linha corresponde ao
+filtro: uma lista vazia nao e' um erro, e nao se confunde com uma falha de
+leitura.
+
+Uma decisao aplicada vale em **qualquer** execucao que contenha aquele
+documento com a **mesma** impressao: um relancamento da pasta nao pede para
+reaprovar. Um conteudo diverso nao herda nada (M3).
 
 **Limite declarado (D33):** se as regras de classificacao mudarem entre dois
 relancamentos, o conteudo alocado muda **nos documentos afectados por essa
@@ -519,6 +585,25 @@ A barreira continua a ser a de sempre: `construir_pre_livro`, atravessada por
 (`cli.py:_find_xml_files`): os ficheiros directamente dentro dela, em ordem de
 nome minusculo.
 
+### Fase 3C.5.b - revisao humana pela CLI
+
+Dois comandos: um que **nao** escreve, e um que escreve **um** evento. Nenhuma
+regra nova de revisao: D8 e D9 ja' estao em `revisao.rs`, e a CLI e' a porta.
+
+| Contrato | Regra | Onde | Prova |
+|---|---|---|---|
+| REV-01 | nenhum evento e' arquivado se o candidato nao se aplica ao alvo escolhido: este comando publica so' o evento aplicavel | `declaracao::classificar`, `main.rs` | `tx74`, `tx77` |
+| REV-02 | a impressao examinada e' **declarada**, nunca lida do arquivo: so' assim `VERSAO_SUPERADA` existe | `main.rs` (`--impressao-conteudo` obrigatoria) | `tx74` |
+| REV-03 | a consulta nao escreve: arquivo byte-identico antes e depois | `consultar_linhas` | `tx70` |
+| REV-04 | o filtro das linhas sem aprovacao humana usa `APROVADO_POR_PESSOA`, nao a particao; os cinco estados mostram-se separados | `declaracao::LinhaConsultada` | `tx70b` |
+| REV-10 | o comando impresso pela consulta **executa-se**: literais PowerShell com apostrofos duplicados, e o plano selecionado | `main.rs` (`literal_ps`) | `tx81` |
+| REV-11 | a consulta mostra o nome do **plano atual**, o arquivado etiquetado, e os avisos da vista | `declaracao::consultar`, `main.rs` | `tx82` |
+| REV-05 | `ANOTAR` aplica-se **sem** decidir o estado; `REVOGAR` sem aprovacao aplicada nao se arquiva | `main.rs` | `tx72`, `tx73` |
+| REV-06 | uma aprovacao vale em qualquer execucao com a **mesma** impressao; um conteudo diverso nao herda | herdado de D8/D9 | `tx75` |
+| REV-07 | a identidade do candidato e' `texto_exato_evento`; a repeticao procura-se entre os **ja' arquivados**, antes de aplicar | `declaracao::ja_arquivado` | `tx77` |
+| REV-08 | eventos estranhos ao lote nao impedem uma declaracao nova, e a historia fica inteira no arquivo | `declaracao::classificar`, `main.rs` | `tx78` |
+| REV-09 | um par incompativel nunca e' arquivado: o arquivo continua utilizavel | a barreira de `aplicar_revisao` | `tx79` |
+
 ### C10 em detalhe: ausencia nao e' zero
 
 Um valor facultativo ausente **nao** vira `0`. `Nfe::valor_cobranca` e
@@ -644,9 +729,16 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-408 testes: 367 de unidade na lib, 6 no binario, 35 de integracao (13 de CLI,
-2 de persistencia entre processos, 4 do percurso composto do export e **16 do
-percurso da CLI 3C.5.a**). Os 16 da 3C.5.a estao em
+422 testes: 367 de unidade na lib, 6 no binario, 49 de integracao (13 de CLI,
+2 de persistencia entre processos, 4 do percurso composto do export, **16 do
+percurso da CLI 3C.5.a** e **14 do percurso de revisao 3C.5.b**). Os 14 da
+3C.5.b estao em `tests/cli_revisao_nfe.rs`: onze provam a consulta, as tres
+operacoes, as recusas antes de escrever e a heranca da decisao entre
+execucoes; um deposita o workbook revisado para a releitura; e dois sao as
+regressoes de aceitacao do audit — `tx81` **executa** em PowerShell o comando
+que a consulta imprime, num caminho com espacos e um apostrofo, e `tx82`
+verifica que consulta e export concordam no nome do plano actual com o aviso
+visivel. Os 16 da 3C.5.a estao em
 `tests/cli_percurso_nfe.rs`: treze provam os codigos de saida e a composicao,
 um deposita o workbook e o manifesto para a releitura independente, e `tx64` e
 `tx65` provam que um erro de IO **depois** da criacao do temporario o nomeia,
@@ -671,7 +763,19 @@ py -I script/releitura_export.py "%TEMP%/fantozzi_3c41/export_percurso.xlsx" ^
 py -I script/releitura_export.py "%TEMP%/fantozzi_3c5a/deposito_<pid>/dados/diagnostico.xlsx" ^
     --modo percurso-cli ^
     --manifesto "%TEMP%/fantozzi_3c5a/deposito_<pid>/dados/diagnostico.manifesto.json"
+
+py -I script/releitura_export.py "%TEMP%/fantozzi_3c5b/deposito_revisado_<pid>/dados/diagnostico.xlsx" ^
+    --modo percurso-cli-revisado ^
+    --manifesto "%TEMP%/fantozzi_3c5b/deposito_revisado_<pid>/dados/diagnostico.manifesto.json"
 ```
+
+O modo `percurso-cli-revisado` (fase 3C.5.b) e' o mesmo workbook **depois** de
+uma declaracao: `percurso-cli` espera zero aprovacoes — folhas `decisoes`,
+`extrato_revisado` e `avisos` sem linhas de dados — e por isso nao pode validar
+um ficheiro que tem uma. As expectativas dos outros dois modos ficam intactas.
+Medido em 2026-10-31: 1117 celulas, 2478 confrontos, 1 divergencia conhecida,
+0 discordancias. Uma registacao de divergencia pertence a um **modo**: a mesma
+celula pode divergir num percurso e nao noutro.
 
 O modo `percurso-cli` (fase 3C.5.a) corre os **mesmos** confrontos sobre o
 ficheiro com expectativas **suas**: aquele workbook nasce da CLI, de tres NF-e
@@ -735,6 +839,8 @@ A contraprova desse confine e' permanente:
 py -I script/controprova_rilettura.py
 py -I script/controprova_rilettura.py --modo percurso-cli ^
     --workbook <deposito>/diagnostico.xlsx --manifesto <deposito>/diagnostico.manifesto.json
+py -I script/controprova_rilettura.py --modo percurso-cli-revisado ^
+    --workbook <deposito>/diagnostico.xlsx --manifesto <deposito>/diagnostico.manifesto.json
 ```
 
 Prepara copias alteradas, deixa o manifesto **intacto**, executa a verificacao
@@ -753,6 +859,13 @@ nomeada — um valor, um total, o `estado_revisao` levado a
 `APROVADO_POR_PESSOA` e o `status_tecnico` levado a `APROVADO` — e a alteracao
 mascarada de `limites!5:descricao` tambem **1**. A contraprova da fixture
 continua com os seus doze casos, inalterada.
+
+O modo `percurso-cli-revisado` tem oito casos: baseline **0**, sem manifesto
+**2**, e cinco mutacoes **1** cada uma com a celula nomeada — um valor, uma
+**aprovacao inventada** numa linha que ninguem aprovou, o autor da decisao
+trocado no `extrato_revisado` e em `decisoes`, e o estado apagado — mais a
+alteracao mascarada. Sao as alteracoes que contam quando as decisoes existem:
+falsificar quem decidiu, ou inventar uma decisao.
 
 Os testes de IO trabalham em arenas sob a directoria temporaria do sistema
 (`%TEMP%\fantozzi_3c3b1\`, `%TEMP%\fantozzi_3c41_io\`), uma por teste, e

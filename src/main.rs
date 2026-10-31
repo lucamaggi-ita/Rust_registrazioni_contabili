@@ -17,10 +17,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use rust_registrazioni_contabili::arquivo::{self, Arquivo, IdentidadePlano};
 use rust_registrazioni_contabili::arquivo_io::{self, Destino, MetadadosLucchetto};
 use rust_registrazioni_contabili::classificacao::Classificador;
+use rust_registrazioni_contabili::declaracao;
 use rust_registrazioni_contabili::export::{self, Proveniencia};
 use rust_registrazioni_contabili::export_io::{self, ErroExportIo, FonteProtegida, SeExistir};
 use rust_registrazioni_contabili::importacao::{self, DocumentoColhido};
-use rust_registrazioni_contabili::modelos::Confianca;
+use rust_registrazioni_contabili::modelos::{Confianca, OrigemLancamento};
 use rust_registrazioni_contabili::nfe;
 use rust_registrazioni_contabili::prelivro::{ContextoDocumento, IdentidadeLote};
 use rust_registrazioni_contabili::regras::{
@@ -111,6 +112,100 @@ struct ArgsArquivar {
     recusar_nao_ok: bool,
 }
 
+/// Le tre operazioni di revisione (fase 3C.5.b).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Operacao {
+    /// Approvazione umana dichiarata.
+    Aprovar,
+    /// Revoca di un'approvazione applicata.
+    Revogar,
+    /// Annotazione: non decide lo stato.
+    Anotar,
+}
+
+/// L'origine della riga bersaglio. Fa parte del bersaglio, e non ha un
+/// predefinito arbitrario.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Origem {
+    XmlNfe,
+    Csv,
+    Manual,
+}
+
+/// Argomenti di `consultar-linhas` (fase 3C.5.b).
+#[derive(Debug, Args)]
+struct ArgsConsultar {
+    /// O arquivo autoritativo, em **somente leitura**.
+    #[arg(long)]
+    arquivo: PathBuf,
+    /// A execucao a consultar.
+    #[arg(long)]
+    lote: String,
+    #[arg(long)]
+    chave: Option<String>,
+    #[arg(long)]
+    conta: Option<String>,
+    #[arg(long)]
+    ordinal: Option<u32>,
+    /// So' as linhas cujo `estado_revisao` **nao** e' APROVADO_POR_PESSOA.
+    ///
+    /// A particao sozinha nao prova uma decisao humana activa: uma linha
+    /// APROVADO_SEM_PROVENIENCIA pode ter particao APROVADO (D9.4).
+    #[arg(long)]
+    so_sem_aprovacao_humana: bool,
+    /// Lista tambem os eventos arquivados **nao** aplicados nesta vista.
+    #[arg(long)]
+    mostrar_nao_aplicados: bool,
+    #[arg(long, default_value = PADRAO_PLANO)]
+    plano_contas: PathBuf,
+}
+
+/// Argomenti di `declarar-revisao` (fase 3C.5.b).
+#[derive(Debug, Args)]
+struct ArgsDeclarar {
+    #[arg(long)]
+    arquivo: PathBuf,
+    /// A execucao onde se verifica o efeito da declaracao.
+    #[arg(long)]
+    lote: String,
+    #[arg(long)]
+    chave: String,
+    #[arg(long)]
+    conta: String,
+    #[arg(long)]
+    ordinal: u32,
+    #[arg(long, value_enum)]
+    origem: Origem,
+    #[arg(long, value_enum)]
+    operacao: Operacao,
+    /// Atribui a declaracao. **Nao** autentica ninguem.
+    #[arg(long)]
+    autor: String,
+    #[arg(long)]
+    motivo: String,
+    /// Obrigatoria com `--operacao anotar`.
+    #[arg(long)]
+    nota: Option<String>,
+    /// A impressao de conteudo que a pessoa **examinou**, copiada de
+    /// `consultar-linhas`. Nao e' lida do arquivo: so' assim VERSAO_SUPERADA
+    /// pode acontecer, e a proveniencia da decisao e' real.
+    #[arg(long)]
+    impressao_conteudo: String,
+    /// A impressao de apresentacao. Omitida: ausencia **declarada**.
+    #[arg(long)]
+    vista: Option<String>,
+    #[arg(long)]
+    instante: Option<String>,
+    /// Ordena duas declaracoes do mesmo instante.
+    #[arg(long)]
+    sequencia: Option<u64>,
+    /// Operador do lucchetto; por omissao, `--autor`.
+    #[arg(long)]
+    operador: Option<String>,
+    #[arg(long, default_value = PADRAO_PLANO)]
+    plano_contas: PathBuf,
+}
+
 /// Argomenti di `exportar-diagnostico` (fase 3C.5.a).
 #[derive(Debug, Args)]
 struct ArgsExportar {
@@ -196,6 +291,18 @@ enum Comando {
     /// Le o arquivo em somente leitura e escreve um unico arquivo derivado.
     ExportarDiagnostico(ArgsExportar),
 
+    /// Mostra as linhas de uma execucao arquivada (fase 3C.5.b).
+    ///
+    /// Nao escreve nada. Mostra os cinco estados separados e as duas
+    /// impressoes que um evento tem de citar.
+    ConsultarLinhas(ArgsConsultar),
+
+    /// Declara uma revisao humana: aprovar, revogar ou anotar (fase 3C.5.b).
+    ///
+    /// Verifica **antes** de publicar: forma, conflitos e aplicacao do
+    /// candidato. O arquivo e' append-only e nao se corrige.
+    DeclararRevisao(ArgsDeclarar),
+
     /// Classifica um texto avulso: util para auditar uma regra.
     Classificar {
         /// Descricao do produto ou da despesa.
@@ -232,6 +339,8 @@ fn main() -> ExitCode {
             regras,
         } => classificar(&texto, &plano_contas, &caminho_regras(tipo, regras)),
         Comando::ArquivarNfe(args) => arquivar_nfe(&args),
+        Comando::ConsultarLinhas(args) => consultar_linhas(&args),
+        Comando::DeclararRevisao(args) => declarar_revisao(&args),
         Comando::ExportarDiagnostico(args) => exportar_diagnostico(&args),
         Comando::AuditarAliases {
             tipo,
@@ -1248,6 +1357,423 @@ fn exportar_diagnostico(a: &ArgsExportar) -> Result<ExitCode, String> {
     println!("STATUS: EXPORTADO");
 
     Ok(ExitCode::from(cod::OK))
+}
+
+// ---------------------------------------------------------------------------
+// Fase 3C.5.b: consultar-linhas e declarar-revisao
+// ---------------------------------------------------------------------------
+
+/// L'etichetta di un enum chiuso, dalla sua serializzazione.
+///
+/// Lo stesso strumento di `export::etiqueta`: i nomi li possiede `serde`
+/// tramite `rename_all`, e riscriverli qui creerebbe una seconda verità.
+fn etiqueta_de<T: serde::Serialize>(valor: &T) -> String {
+    match serde_json::to_value(valor) {
+        Ok(serde_json::Value::String(s)) => s,
+        Ok(outro) => outro.to_string(),
+        Err(_) => "NAO_SERIALIZAVEL".to_string(),
+    }
+}
+
+/// La vista revisionata di **una** esecuzione, come la costruisce l'export.
+///
+/// Gli eventi sono quelli **globali** dell'archivio, non solo quelli del
+/// lotto: un evento che riguarda un documento di un altro lotto diventa
+/// `ALVO_AUSENTE` in questa vista, ed è normale.
+struct VistaDoLote {
+    vista: revisao::VistaRevisada,
+    eventos: Vec<revisao::EventoRevisao>,
+    leitura: arquivo_io::Leitura,
+}
+
+fn vista_do_lote(
+    destino: &Destino,
+    lote: &str,
+    plano: &PlanoContas,
+) -> Result<VistaDoLote, (u8, String)> {
+    let corrente = destino.corrente();
+    if !corrente.exists() {
+        return Err((
+            importacao::codigos_exportar::IO,
+            format!("{} nao existe: nada a consultar", corrente.display()),
+        ));
+    }
+    let leitura = arquivo_io::ler(destino)
+        .map_err(|erro| (importacao::codigos_exportar::IO, erro.to_string()))?;
+    // Il lotto deve esistere: l'errore nomina quelli disponibili.
+    export::sub_arquivo_do_lote(&leitura.arquivo, lote)
+        .map_err(|erro| (declaracao::codigos_revisao::CONFIGURACAO, erro.to_string()))?;
+    let contextos = leitura.arquivo.contextos_do_lote(lote);
+    let eventos = leitura.arquivo.eventos();
+    let vista = revisao::aplicar_revisao(&contextos, plano, &eventos)
+        .map_err(|erro| (declaracao::codigos_revisao::BARREIRA, erro.to_string()))?;
+    Ok(VistaDoLote {
+        vista,
+        eventos,
+        leitura,
+    })
+}
+
+fn consultar_linhas(a: &ArgsConsultar) -> Result<ExitCode, String> {
+    let plano = carregar_plano_validado(&a.plano_contas)?;
+    let destino = destino_de(&a.arquivo)?;
+    let dados = match vista_do_lote(&destino, &a.lote, &plano) {
+        Ok(dados) => dados,
+        Err((codigo, mensagem)) => return recusa(codigo, mensagem),
+    };
+
+    println!("CONSULTAR LINHAS");
+    println!("================");
+    println!("Arquivo    : {} (somente leitura)", a.arquivo.display());
+    println!(
+        "Execucao   : {} na revisao {}",
+        a.lote, dados.leitura.base.revisao
+    );
+    println!();
+
+    let todas = declaracao::consultar(&dados.vista);
+    let escolhidas: Vec<&declaracao::LinhaConsultada> = todas
+        .iter()
+        .filter(|l| {
+            a.chave.as_deref().is_none_or(|c| l.chave_origem == c)
+                && a.conta.as_deref().is_none_or(|c| l.conta_id == c)
+                && a.ordinal.is_none_or(|o| l.ordinal == o)
+                && (!a.so_sem_aprovacao_humana || l.sem_aprovacao_humana())
+        })
+        .collect();
+
+    for linha in &escolhidas {
+        println!(
+            "LINHA  chave {}  conta {} {}  ordinal {}  origem {}",
+            linha.chave_origem,
+            linha.conta_id,
+            // Il nome del piano **usato ora**: è quello con cui l'export
+            // mostra la riga e con cui si calcola l'impronta di presentazione
+            // stampata qui sotto.
+            linha.conta_nome_plano,
+            linha.ordinal,
+            etiqueta_de(&linha.origem)
+        );
+        if linha.conta_nome_historico != linha.conta_nome_plano {
+            println!(
+                "  nome no plano atual  {}\n  nome arquivado       {} (o nome do momento \
+                 da alocacao; D8.3: as decisoes permanecem)",
+                linha.conta_nome_plano, linha.conta_nome_historico
+            );
+        }
+        // I cinque stati, **separati**: nessuno si deduce dall'altro.
+        println!(
+            "  status_tecnico         {:<16} estado_revisao   {}",
+            etiqueta_de(&linha.status_tecnico),
+            linha.estado.rotulo()
+        );
+        println!(
+            "  particao               {:<16} stato_documento  {}",
+            linha.particao.rotulo(),
+            etiqueta_de(&linha.stato_documento)
+        );
+        println!(
+            "  no_extrato_revisado    {:<16} valor            {}",
+            if linha.no_extrato_revisado {
+                "SIM"
+            } else {
+                "NAO"
+            },
+            linha.valor
+        );
+        // Un'approvazione su un documento ERRO e' ammessa (D9.2) e **non** e'
+        // un'inclusione: il motivo dell'esclusione si stampa come la vista lo
+        // dichiara.
+        if let Some(motivo) = &linha.motivo_exclusao {
+            println!("  fora do extrato porque {motivo}");
+        }
+        match (&linha.impressao_conteudo, &linha.impressao_apresentacao) {
+            (Some(conteudo), apresentacao) => {
+                println!("  impressao_conteudo     {conteudo}");
+                println!(
+                    "  impressao_apresentacao {}",
+                    apresentacao.as_deref().unwrap_or("NAO_DISPONIVEL")
+                );
+            }
+            (None, _) => println!("  impressao_conteudo     NAO_DISPONIVEL"),
+        }
+        println!(
+            "  decisoes aplicadas     {:<16} anotacoes        {}",
+            linha.decisoes_aplicadas, linha.anotacoes
+        );
+        if let Some(conteudo) = &linha.impressao_conteudo {
+            // Comodita', non prova: generare il comando non dimostra che
+            // l'operatore abbia verificato i dati. I letterali vanno fra apici
+            // **semplici**, perche' in PowerShell gli apici doppi interpolano.
+            // Ogni argomento testuale e' un letterale, e il piano e' quello
+            // **selezionato** per questa consultazione: senza di lui la
+            // dichiarazione caricherebbe il predefinito invece del piano con
+            // cui l'operatore ha appena guardato la riga.
+            println!(
+                "  para declarar, copie e complete <OPERACAO>, <AUTOR> e <MOTIVO>:\n\
+                 \x20   cargo run -- declarar-revisao --arquivo {} --lote {} --chave {} \
+                 --conta {} --ordinal {} --origem {} --plano-contas {} \
+                 --operacao <OPERACAO> --autor '<AUTOR>' --motivo '<MOTIVO>' \
+                 --impressao-conteudo {}{}",
+                literal_ps(&a.arquivo.display().to_string()),
+                literal_ps(&a.lote),
+                literal_ps(&linha.chave_origem),
+                literal_ps(&linha.conta_id),
+                linha.ordinal,
+                origem_para_argumento(linha.origem),
+                literal_ps(&a.plano_contas.display().to_string()),
+                literal_ps(conteudo),
+                linha
+                    .impressao_apresentacao
+                    .as_ref()
+                    .map(|v| format!(" --vista {}", literal_ps(v)))
+                    .unwrap_or_default()
+            );
+        }
+        println!();
+    }
+
+    // `R3C5B-I02`: gli avvisi li produce gia' la vista — `APRESENTACAO_MUDADA`
+    // compreso — e l'export li mostra. Qui si stampano, senza ricostruirne la
+    // logica: consultazione e derivato devono dire la stessa cosa.
+    if !dados.vista.avisos.is_empty() || !dados.vista.pre_livro.avisos.is_empty() {
+        println!("AVISOS DA VISTA");
+        for aviso in &dados.vista.avisos {
+            println!("  VISTA      {} {}", aviso.codigo, aviso.detalhe);
+        }
+        for aviso in &dados.vista.pre_livro.avisos {
+            println!("  PRE_LIVRO  {} {}", aviso.codigo, aviso.detalhe);
+        }
+        println!();
+    }
+
+    if a.mostrar_nao_aplicados {
+        println!("EVENTOS ARQUIVADOS NAO APLICADOS NESTA VISTA");
+        if dados.vista.eventos_nao_aplicados.is_empty() {
+            println!("  nenhum");
+        }
+        for nao in &dados.vista.eventos_nao_aplicados {
+            println!(
+                "  {:<22} {} {} por {} em {}: {}",
+                nao.motivo.rotulo(),
+                nao.evento.alvo.chave_origem,
+                nao.evento.alvo.conta_id,
+                nao.evento.autor,
+                nao.evento.instante.to_rfc3339(),
+                nao.detalhe
+            );
+        }
+        println!();
+    }
+
+    // Nessuna riga che corrisponda al filtro **non** e' un errore: e' un
+    // elenco vuoto, e non si confonde con un fallimento di lettura.
+    println!(
+        "RESUMO: {} linha(s) na execucao, {} mostrada(s){}",
+        todas.len(),
+        escolhidas.len(),
+        if a.so_sem_aprovacao_humana {
+            " sem aprovacao humana ativa"
+        } else {
+            ""
+        }
+    );
+    println!("Limites    : o autor de uma decisao e' uma cadeia declarada, nao autenticada");
+    println!("STATUS: CONSULTADO");
+    Ok(ExitCode::from(declaracao::codigos_revisao::OK))
+}
+
+/// Un letterale PowerShell: apici semplici, con gli apostrofi interni
+/// raddoppiati.
+///
+/// `R3C5B-I01`: il comando stampato dalla consultazione va **eseguito**, e un
+/// percorso con spazi — `C:\Users\Recanto do Sossego\…` — senza apici si
+/// spezza in più argomenti. Gli apici doppi non bastano: PowerShell vi
+/// interpola `$` e il backtick, e un motivo scritto da una persona può
+/// contenerli.
+fn literal_ps(valor: &str) -> String {
+    format!("'{}'", valor.replace('\'', "''"))
+}
+
+/// Il valore di `--origem` che corrisponde a un'origine.
+fn origem_para_argumento(origem: OrigemLancamento) -> &'static str {
+    match origem {
+        OrigemLancamento::XmlNfe => "xml-nfe",
+        OrigemLancamento::Csv => "csv",
+        OrigemLancamento::Manual => "manual",
+    }
+}
+
+fn declarar_revisao(a: &ArgsDeclarar) -> Result<ExitCode, String> {
+    use declaracao::codigos_revisao as cod;
+
+    let instante = instante_de(&a.instante)?;
+    if a.impressao_conteudo.trim().is_empty() {
+        return Err(
+            "--impressao-conteudo vazia: declare a impressao que examinou, \
+             copiada de `consultar-linhas` ou da coluna do foglio diagnostico"
+                .to_string(),
+        );
+    }
+    let plano = carregar_plano_validado(&a.plano_contas)?;
+    let destino = destino_de(&a.arquivo)?;
+    let dados = match vista_do_lote(&destino, &a.lote, &plano) {
+        Ok(dados) => dados,
+        Err((codigo, mensagem)) => return recusa(codigo, mensagem),
+    };
+
+    let declarada = declaracao::Declaracao {
+        alvo: declaracao::Alvo {
+            chave_origem: a.chave.clone(),
+            conta_id: a.conta.clone(),
+            ordinal: a.ordinal,
+            origem: match a.origem {
+                Origem::XmlNfe => OrigemLancamento::XmlNfe,
+                Origem::Csv => OrigemLancamento::Csv,
+                Origem::Manual => OrigemLancamento::Manual,
+            },
+        },
+        operacao: match a.operacao {
+            Operacao::Aprovar => revisao::OperacaoRevisao::Aprovar,
+            Operacao::Revogar => revisao::OperacaoRevisao::Revogar,
+            Operacao::Anotar => revisao::OperacaoRevisao::Anotar,
+        },
+        autor: a.autor.clone(),
+        motivo: a.motivo.clone(),
+        nota: a.nota.clone(),
+        impressao_conteudo: a.impressao_conteudo.clone(),
+        vista: a.vista.clone(),
+        instante: instante.valor,
+        sequencia: a.sequencia,
+    };
+    let candidato =
+        declaracao::candidato(&declarada).map_err(|erro| format!("declaracao recusada: {erro}"))?;
+
+    println!("DECLARAR REVISAO");
+    println!("================");
+    println!("Arquivo    : {}", a.arquivo.display());
+    println!(
+        "Execucao   : {} na revisao {}",
+        a.lote, dados.leitura.base.revisao
+    );
+    println!(
+        "Alvo       : {} {} ordinal {} origem {}",
+        a.chave,
+        a.conta,
+        a.ordinal,
+        origem_para_argumento(declarada.alvo.origem)
+    );
+    println!(
+        "Operacao   : {} por {} em {} ({})",
+        declarada.operacao.rotulo(),
+        a.autor,
+        instante.valor.to_rfc3339(),
+        instante.fonte
+    );
+    println!();
+
+    // La barriera, prima di qualunque scrittura.
+    let esito = match declaracao::classificar(
+        &dados.leitura.arquivo.contextos_do_lote(&a.lote),
+        &plano,
+        &dados.eventos,
+        &candidato,
+    ) {
+        Ok(esito) => esito,
+        Err(erro) => {
+            return recusa(
+                cod::BARREIRA,
+                format!(
+                    "{erro}. Arquivo corrente NAO publicado, o export anterior continua utilizavel"
+                ),
+            );
+        }
+    };
+
+    match esito {
+        declaracao::EsitoCandidato::JaArquivado => recusa(
+            cod::NAO_APLICADO,
+            format!(
+                "{}: um evento com os MESMOS dados declarados, instante e offset incluidos, \
+                     ja' esta' arquivado. Uma declaracao distinta exige um dado distinto. \
+                     Arquivo corrente NAO publicado",
+                revisao::MotivoNaoAplicacao::Repeticao.rotulo()
+            ),
+        ),
+        declaracao::EsitoCandidato::NaoAplicado { motivo, detalhe } => recusa(
+            cod::NAO_APLICADO,
+            format!(
+                "{}: {detalhe}. Este comando publica apenas o evento aplicavel ao alvo \
+                     selecionado. Arquivo corrente NAO publicado",
+                motivo.rotulo()
+            ),
+        ),
+        declaracao::EsitoCandidato::Aplicado {
+            estado_antes,
+            estado_depois,
+        } => {
+            // Il candidato si aggiunge all'archivio **intero**: la storia
+            // resta tutta, nessun evento viene scartato.
+            let mut candidatura = dados.leitura.arquivo.clone();
+            candidatura.acrescentar_eventos(std::slice::from_ref(&candidato));
+            let lucchetto = MetadadosLucchetto {
+                operador: a.operador.clone().unwrap_or_else(|| a.autor.clone()),
+                instante: instante.valor,
+                motivo: format!(
+                    "declaracao {} sobre {}/{}/{}",
+                    declarada.operacao.rotulo(),
+                    a.chave,
+                    a.conta,
+                    a.ordinal
+                ),
+            };
+            let publicacao = match arquivo_io::publicar(
+                &destino,
+                &candidatura,
+                Some(&dados.leitura.base),
+                &lucchetto,
+            ) {
+                Ok(publicacao) => publicacao,
+                Err(erro) => {
+                    eprintln!("RECUSADO: {erro}. Arquivo corrente NAO publicado");
+                    declarar_residuos(residuos_do_arquivo(&destino));
+                    return Ok(ExitCode::from(cod::IO));
+                }
+            };
+
+            let antes = estado_antes
+                .map(|e| e.rotulo().to_string())
+                .unwrap_or_else(|| "LINHA_AUSENTE_NESTA_EXECUCAO".to_string());
+            let depois = estado_depois
+                .map(|e| e.rotulo().to_string())
+                .unwrap_or_else(|| "LINHA_AUSENTE_NESTA_EXECUCAO".to_string());
+            println!(
+                "Arquivo corrente PUBLICADO: {}",
+                destino.corrente().display()
+            );
+            println!("Revisao            : {}", publicacao.revisao_publicada);
+            if let Some(anterior) = &publicacao.geracao_anterior {
+                println!("Geracao anterior   : {} (conservada)", anterior.display());
+            }
+            if publicacao.lucchetto_residuo {
+                println!("Lucchetto residuo  : SIM (a publicacao E' valida)");
+            }
+            println!("Evento             : APLICADO");
+            println!("Estado da linha    : {antes} -> {depois}");
+            if antes == depois {
+                println!(
+                    "                     (identico: uma anotacao, uma confirmacao ou um \
+                     evento retroativo aplicam-se sem decidir o estado corrente)"
+                );
+            }
+            println!(
+                "Proximo passo      : regenerar o export desta execucao com \
+                 `exportar-diagnostico --se-existir substituir`"
+            );
+            println!("STATUS: DECLARADO");
+            Ok(ExitCode::from(cod::OK))
+        }
+    }
 }
 
 #[cfg(test)]

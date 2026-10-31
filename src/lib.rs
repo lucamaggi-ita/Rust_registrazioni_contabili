@@ -22,12 +22,15 @@
 //!
 //! Fase 3C.5.a: composicao da importacao usada pela CLI ([`importacao`]).
 //!
+//! Fase 3C.5.b: declaracao de revisao a partir da CLI ([`declaracao`]).
+//!
 //! Fase 3C.5.b/3D (pendentes): resto do uso pela CLI e DRE gerencial.
 
 pub mod alocacao;
 pub mod arquivo;
 pub mod arquivo_io;
 pub mod classificacao;
+pub mod declaracao;
 pub(crate) mod dinheiro;
 pub mod export;
 pub mod export_io;
