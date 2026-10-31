@@ -997,7 +997,17 @@ fn folha_diagnostico(vista: &VistaRevisada) -> Result<Folha, ErroExport> {
             Celula::decimal(l.valor),
         ];
         celulas.extend(numero_de_comodo(l.valor));
-        celulas.push(Celula::texto(etiqueta(&l.status_revisao, "StatusRevisao")?));
+        // `R3C41-05`: l'esito **tecnico** della 3B, che nessuna decisione
+        // umana riscrive, sta in `LinhaRevisada::status_tecnico`.
+        // `lancamento.status_revisao` è la copia che la 3C.3 **proietta** per
+        // il pre-libro, dove un'approvazione diventa `APROVADO`: usarla qui
+        // confondeva due delle tre nozioni separate da `F3C-29` e mascherava
+        // un `REVISAR` tecnico. Riga assente dalla vista: cella vuota, come
+        // per `estado_revisao` accanto, perché il dato tecnico non si deduce.
+        celulas.push(match revisada {
+            Some(r) => Celula::texto(etiqueta(&r.status_tecnico, "StatusRevisao")?),
+            None => Celula::Vazia,
+        });
         celulas.push(match revisada {
             Some(r) => Celula::texto(r.estado.rotulo()),
             None => Celula::Vazia,
@@ -1698,6 +1708,9 @@ mod tests {
     use super::testes_comuns::*;
     use super::*;
     use crate::arquivo::testes_comuns as arq;
+    // `R3C41-05`: la regressione costruisce una riga con l'esito tecnico
+    // REVISAR, quindi le serve il tipo.
+    use crate::modelos::StatusRevisao;
     use crate::revisao::OperacaoRevisao;
 
     fn celula_texto(folha: &Folha, linha: usize, coluna: &str) -> String {
@@ -1720,6 +1733,14 @@ mod tests {
             .position(|c| *c == coluna)
             .unwrap_or_else(|| panic!("colonna {coluna} in {}", folha.nome));
         folha.linhas[linha][j].clone()
+    }
+
+    /// Indice della riga del foglio per un conto, invece di una costante: se
+    /// la fixture cresce, il test continua a guardare la riga giusta.
+    fn linha_de(folha: &Folha, conta_id: &str) -> usize {
+        (0..folha.linhas.len())
+            .find(|i| celula_texto(folha, *i, "conta_id") == conta_id)
+            .unwrap_or_else(|| panic!("riga del conto {conta_id} in {}", folha.nome))
     }
 
     fn folha_de<'a>(m: &'a ModeloExport, nome: &str) -> &'a Folha {
@@ -2639,5 +2660,71 @@ mod tests {
             let d = folha_de(&m, "diagnostico");
             assert_eq!(celula_texto(d, 0, "observacoes"), texto, "{nome}");
         }
+    }
+
+    // =================================================================
+    // R3C41-05: tre stati distinti, tre fonti distinte
+    // =================================================================
+
+    /// `R3C41-05`, caso del campione mostrato a Luca: lo stato **tecnico**
+    /// della 3B non è la decisione umana, e un'approvazione non lo riscrive.
+    ///
+    /// La cella `status_tecnico` veniva riempita da `status_revisao` della
+    /// copia **proiettata** per il pre-libro, che la 3C.3 aggiorna per
+    /// riflettere le decisioni: nel file compariva `APROVADO` dove il dato
+    /// tecnico era `OK`.
+    #[test]
+    fn r5_status_tecnico_ok_non_diventa_aprovado() {
+        let m = modelo(&vista_aprovada(), &proveniencia()).expect("il modello");
+        let d = folha_de(&m, "diagnostico");
+        let i = linha_de(d, "2.01.004");
+
+        assert_eq!(celula_texto(d, i, "status_tecnico"), "OK");
+        assert_eq!(celula_texto(d, i, "estado_revisao"), "APROVADO_POR_PESSOA");
+        assert_eq!(celula_texto(d, i, "particao"), "APROVADO");
+        // L'approvazione resta visibile dove le compete, e l'importo non cambia.
+        assert_eq!(celula_texto(d, i, "valor"), "10.00");
+        assert_eq!(celula_texto(d, i, "no_extrato_revisado"), "SIM");
+    }
+
+    /// `R3C41-05`, il caso che conta davvero: un'approvazione umana **non**
+    /// deve mascherare nell'export l'esigenza tecnica di revisione.
+    #[test]
+    fn r5_status_tecnico_revisar_resta_revisar_dopo_approvazione() {
+        let mut documento = arq::um_documento();
+        documento.alocacao.lancamentos[0].status_revisao = StatusRevisao::Revisar;
+        let docs = vec![documento];
+        let eventos = vec![arq::evento(
+            &docs[0],
+            "2.01.004",
+            0,
+            crate::revisao::OperacaoRevisao::Aprovar,
+            12,
+            -3 * 3600,
+        )];
+        let m = modelo(&vista(&docs, &eventos), &proveniencia()).expect("il modello");
+        let d = folha_de(&m, "diagnostico");
+        let i = linha_de(d, "2.01.004");
+
+        // Il tecnico resta quello della 3B: la persona ha deciso di accettare
+        // la riga, non ha cambiato l'esito dell'allocazione.
+        assert_eq!(celula_texto(d, i, "status_tecnico"), "REVISAR");
+        assert_eq!(celula_texto(d, i, "estado_revisao"), "APROVADO_POR_PESSOA");
+        assert_eq!(celula_texto(d, i, "particao"), "APROVADO");
+    }
+
+    /// Senza nessun evento le tre colonne restano coerenti: la regressione
+    /// sopra non passerebbe se la fonte fosse costante.
+    #[test]
+    fn r5_senza_eventi_il_tecnico_e_lo_stato_concordano() {
+        let docs = documentos();
+        let m = modelo(&vista(&docs, &[]), &proveniencia()).expect("il modello");
+        let d = folha_de(&m, "diagnostico");
+        let i = linha_de(d, "2.01.004");
+
+        assert_eq!(celula_texto(d, i, "status_tecnico"), "OK");
+        // Lo stato della **vista** ha un nome proprio: non è il rotulo dello
+        // stato tecnico, ed è questa distinzione che il riscontro riguarda.
+        assert_eq!(celula_texto(d, i, "estado_revisao"), "TECNICO_OK");
     }
 }

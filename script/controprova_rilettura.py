@@ -68,6 +68,9 @@ MUTAZIONI = [
     ("autore", "decisoes", 2, "autor", "Eve"),
     ("motivo", "decisoes", 2, "motivo", "visto e aceito"),
     ("indicatore", "indicadores", 11, "valor", "99.00"),
+    # `R3C41-05`: la firma esatta del difetto corretto. Un `APROVADO`
+    # nello stato tecnico maschererebbe l'esito della 3B.
+    ("stato_tecnico", "diagnostico", 2, "status_tecnico", "APROVADO"),
 ]
 
 # Alterazioni **mascherate**: il pacchetto rappresenta un testo diverso da

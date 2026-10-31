@@ -377,6 +377,7 @@ O arquivo JSON continua **autoritativo** (D7(a)): o workbook e' um derivado e
 | EXP-43b/44/52 | `Recusar` **controla** a existencia e nao reivindica o nome final, logo nenhum destino de zero bytes fica; o lucchetto cooperativo serializa as execucoes; o limite de nao atomicidade esta' declarado no ficheiro | `export_io.rs` | `tx34_*`, `tx34b_*` |
 | EXP-54…58 | as divergencias conhecidas do leitor ficam registadas uma por confronto, com entrada, versao e resultado; `TX-37` **nao** se declara integralmente superada; nenhuma compensacao no writer e nenhum dado recusado a mais | `script/releitura_export.py`, folha `limites` | `limites_dichiara_*`, o script |
 | EXP-54/56, leitura operativa | uma excepcao concede-se ao **caso esperado**: modo, entrada, leitor e versao da medicao, resultado registado, e o **pacote deste giro** a representar o valor esperado em passagem unica. Falta uma condicao, e e' discordancia | `script/releitura_export.py` (`Pacote`, `_valuta_eccezione`) | `script/controprova_rilettura.py`: duas alteracoes mascaradas recusadas, sonda da versao do leitor |
+| F3C-29 no export (`R3C41-05`) | as tres colunas de estado do `diagnostico` tem **tres fontes**: `status_tecnico` vem de `LinhaRevisada::status_tecnico` e nenhuma decisao humana a reescreve; `estado_revisao` e' derivada; `particao` vem do pre-livro projectado. `Lancamento::status_revisao` **nao** e' fonte desta folha | `export.rs`, §6.3.3 da especificacao | `r5_*` (tres testes), atendas explicitas da releitura, mutacao `stato_tecnico` da contraprova |
 | EXP-25/26 | determinismo dos **conteudos e da ordem**, nao dos bytes do ZIP | `export.rs` | `tx20_*` |
 
 Superficie publica nova:
@@ -564,12 +565,13 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-386 testes: 364 de unidade na lib, 3 no binario, 19 de integracao (13 de CLI,
-2 de persistencia entre processos e 4 do percurso composto do export). Os 49
-novos sao da fase 3C.4.1 (31 em `export.rs`, 12 em `export_io.rs`, 2 em
-`xlsx.rs`, 4 em `tests/export_releitura.rs`), e quatro deles sao as regressoes
-dos rilevos `R3C41-01`, `R3C41-02` e `R3C41-03` do audit de 2026-10-30; os 337
-anteriores continuam verdes **sem nenhuma alteracao**.
+389 testes: 367 de unidade na lib, 3 no binario, 19 de integracao (13 de CLI,
+2 de persistencia entre processos e 4 do percurso composto do export). Os 52
+novos sao da fase 3C.4.1 (34 em `export.rs`, 12 em `export_io.rs`, 2 em
+`xlsx.rs`, 4 em `tests/export_releitura.rs`); sete deles sao regressoes de
+rilevos do audit de 2026-10-30: quatro de `R3C41-01`/`-02`/`-03` e tres de
+`R3C41-05`, a fonte errada de `diagnostico.status_tecnico`. Os 337 anteriores
+continuam verdes **sem nenhuma alteracao**.
 
 A prova de releitura independente **nao** corre com `cargo test`: um teste
 deposita o workbook e termina, e o confronto e' um comando separado (`EXP-29`).
@@ -584,7 +586,7 @@ py -I script/releitura_export.py "%TEMP%/fantozzi_3c41/export_percurso.xlsx" ^
 O modo `export` confronta **campo por campo**, nao por amostra: o teste de
 integracao deposita, ao lado do workbook, um **manifesto** JSON do modelo —
 cabecalhos, linhas, valores e tipo de cada celula — e o script compara todas.
-Medido em 2026-10-30: 13 folhas, 411 celulas, 992 confrontos. O manifesto nasce
+Medido em 2026-10-30: 13 folhas, 411 celulas, 998 confrontos. O manifesto nasce
 do mesmo modelo que gera o ficheiro, por isso o script tem tambem um conjunto
 de **expectativas explicitas** escritas a mao (totais, chaves, estados, autores
 e motivos): uma mutacao de qualquer uma delas faz falhar o confronto, como a
@@ -633,7 +635,7 @@ py -I script/controprova_rilettura.py
 
 Prepara copias alteradas, deixa o manifesto **intacto**, executa a verificacao
 sem a modificar e compara os codigos de saida. Medido em 2026-10-30: baseline
-**0**, sem manifesto **2**, sete mutacoes ordinarias **1** cada uma com a
+**0**, sem manifesto **2**, oito mutacoes ordinarias **1** cada uma com a
 celula nomeada, e duas alteracoes **mascaradas** por uma divergencia conhecida
 — uma em `decisoes!2:motivo`, outra em `limites!5:descricao` — tambem **1**.
 Nessas duas o leitor devolve exactamente o resultado registado: sao as

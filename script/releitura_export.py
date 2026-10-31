@@ -266,6 +266,13 @@ ATTESE_ESPLICITE: list[tuple[str, int, str, object, str]] = [
     ("diagnostico", 2, "valor_numero", 10.0, "n"),
     ("diagnostico", 2, "data_pagamento", None, ""),
     ("diagnostico", 2, "data_pagamento_status", "NAO_DISPONIVEL", "s"),
+    # `R3C41-05`: tre stati, tre fonti. L'esito **tecnico** della 3B non e' la
+    # decisione umana, e un'approvazione non lo riscrive: nel campione il
+    # tecnico e' OK, la decisione e' APROVADO_POR_PESSOA e la partizione e'
+    # APROVADO. Z2, AA2 e AB2 del print verificato con Luca.
+    ("diagnostico", 2, "status_tecnico", "OK", "s"),
+    ("diagnostico", 2, "estado_revisao", "APROVADO_POR_PESSOA", "s"),
+    ("diagnostico", 2, "particao", "APROVADO", "s"),
     # Totali.
     ("resumos", 2, "valor_total", "10.00", "s"),
     ("resumos", 2, "valor_total_numero", 10.0, "n"),
