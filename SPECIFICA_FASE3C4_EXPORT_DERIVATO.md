@@ -1,11 +1,11 @@
-| il comportamento di Excel sul file prodotto, su# Specifica fase 3C.4 — export derivato e confine degli ingressi
+# Specifica fase 3C.4 — export derivato e confine degli ingressi
 
 | Voce | Valore |
 |---|---|
 | Data | 2026-10-22 |
 | Mandato | `MANDATO_CLAUDE_FASE3C4_SPECIFICA_EXPORT_20261022.md` |
 | Perimetro | **analisi e specifica**. Nessuna riga di Rust del progetto, nessuna modifica di `Cargo.*`, nessuna installazione, nessun archivio reale, nessun commit |
-| Stato | **AUDIT DELLA SPECIFICA SUPERATO** il 2026-10-23 (§18.3); **D18–D26 ed `EXP-29` decise** (§3.3). Nessuna decisione resta aperta: la specifica è pronta per il mandato implementativo 3C.4.1. I contratti `EXP-nn` restano proposte e le prove `TX-nn` pianificate 
+| Stato | **AUDIT DELLA SPECIFICA E DELL'IMPLEMENTAZIONE SUPERATI**. D18–D26, `EXP-29` e la divergenza nota del lettore restano le decisioni registrate. Il controllo finale del 2026-10-30 ha chiuso anche il residuo di `R3C41-04`: tutti i rilievi sono chiusi (§19.9). I precedenti esiti negativi e le correzioni restano documentati in §19.7 e §19.8. Prove su Microsoft Excel ancora **NON_ESEGUITE**; registrazione locale autorizzata, nessun push autorizzato in questo passaggio |
 | Revisione 2 | correzione dei cinque riscontri dell'audit del 2026-10-23, con tre riproduzioni sul codice reale in §5.4. Contratti nuovi `EXP-30…EXP-45`, prove nuove `TX-29…TX-36`, proposta nuova D24 |
 | Revisione 3 | correzione dei due residui dell'audit mirato del 2026-10-23, riprodotti in §5.5: autore dell'approvazione attiva e confronto dei nomi riservati. Contratti nuovi `EXP-46…EXP-50`, prove nuove `TX-34b`, `TX-21` e `TX-33` estesi. Quattro allineamenti accolti: §18.2 |
 | Revisione 4 | precisazione recepita dall'esito finale: il file a zero byte viene dalla **rivendicazione** (`EXP-43`), non dal lucchetto (`EXP-44`). L'alternativa già descritta in §8.2 ha ora un nome proprio, **D25**, e le due scelte sono indipendenti: §18.3 |
@@ -13,6 +13,10 @@
 | Revisione 6 | recepito il controllo mirato delle decisioni del 2026-10-23: `R5-01`, l'incompatibilità fra D18 e il divieto assoluto di `f64`, verificata da me sulla firma dell'API e aperta come decisione **D26** (§7.2.3); lettura operativa di D22 precisata (§7.4.1); affermazione sull'offline circoscritta (§10.3); `EXP-29` registrato come raccomandazione (§10.2). `EXP-07`, `EXP-39` ed `EXP-40` sospesi: §18.5 |
 | Revisione 7 | **D26(a) approvata** da Luca il 2026-10-23: `f64` ammesso soltanto nel confine di scrittura della cella numerica, con le cinque condizioni. Riallineati `EXP-07` ed `EXP-39`, `EXP-40` decaduto, `EXP-53` nuovo, `TX-04` sdoppiato fra confronto esatto del testo e confronto per valore della cella numerica: §7.2.1, §7.2.3 |
 | Revisione 8 | **`EXP-29` approvata** da Luca il 2026-10-23: prova indipendente ripetibile con Python e `openpyxl` già disponibili, senza installazioni (§10.2). §11.1 allineata: tolto il rinvio operativo a `EXP-40` decaduto, e §11.2 nuova descrive il controllo dell'unica funzione autorizzata a usare `f64` secondo `EXP-53` |
+| Revisione 9 | esito del primo passo del lotto 3C.4.1 e decisione sulla **divergenza nota del lettore**: strada (a) approvata da Luca il 2026-10-23. Contratti nuovi `EXP-54…EXP-58`, `TX-37` eseguita e **non** dichiarata integralmente superata, foglio `limites` con lo stato `DIVERGENZA_NOTA`: §7.4.1.1, §6.3.14 |
+| Revisione 10 | correzione dei quattro rilievi dell'audit indipendente del lotto 3C.4.1, del 2026-10-30, ognuno riprodotto prima di essere corretto: §19.7. §7.4.1.1.1 nuova registra due divergenze del lettore che il campionamento non guardava, di **due cause distinte**. §6.3.9 concorda col proprio elenco, e il conteggio dei pacchetti è corretto in `README.md` e nel mandato. Corretti anche due difetti dell'intestazione già presenti in `9d99832`: un frammento di riga incollato davanti al titolo e la riga `Stato` senza barra di chiusura |
+| Revisione 11 | chiuso il residuo del controllo mirato del 2026-10-30: un'eccezione per una divergenza nota veniva concessa sul solo risultato del lettore, e un file alterato passava come limite dichiarato. §7.4.1.1.2 nuova dà la lettura operativa di `EXP-54` ed `EXP-56` con le cinque condizioni, fra cui la verifica del valore **rappresentato dal pacchetto**; prova permanente in `script/controprova_rilettura.py`. Esito e misure in §19.8. Nessuna decisione nuova, codice Rust invariato |
+| Revisione 12 | esito finale del controllo indipendente sul confine di verifica: **superato**, tutti i rilievi R3C41-01..04 chiusi. Registrazione nei due gruppi autorizzata da Luca il 2026-10-30. Solo aggiornamento dello stato e appendice §19.9; nessuna modifica ai contratti o al codice |
 | HEAD alla stesura | `af5683d4522166d5283fdd1f206c91cb3e841dac` |
 | Baseline tecnica | **[RIUSATA]** dal lotto 3C.3.b.1: 337 test (319 lib, 3 binario, 15 integrazione), `fmt`/`clippy`/`diff --check` puliti. Non rieseguita: questo lotto produce solo Markdown |
 | Decisioni approvate dal mandato | **D11(a)** import dello storico Excel rinviato; **D12(a)** importo non interpretabile → riga `INCOMPLETO` con testo originale e motivo |
@@ -824,7 +828,7 @@ totali sarebbe una riga che invita a sommare ciò che non è sommabile.
 
 #### 6.3.9 Foglio `indicadores`
 
-Una riga per indicatore, invece di una riga larga sedici colonne: così
+Una riga per indicatore, invece di una riga larga quindici colonne: così
 aggiungere un indicatore in `prelivro` non cambia lo schema.
 
 ```text
@@ -832,7 +836,7 @@ nome, valor, valor_numero, valor_numero_status, valor_numero_motivo, tipo
 ```
 
 `nome` è il nome del campo di `Indicadores`; `valor` è sempre `T` ed esatto;
-`tipo` è `CONTAGEM` o `MONETARIO`. Le sedici righe attese, nell'ordine dei
+`tipo` è `CONTAGEM` o `MONETARIO`. Le quindici righe attese, nell'ordine dei
 campi della struttura: `documentos`, `documentos_ok`, `documentos_parcial`,
 `documentos_erro`, `documentos_sem_linhas`, `linhas`, `linhas_aprovado`,
 `linhas_ok`, `linhas_revisar`, `valor_total`, `valor_aprovado`, `valor_ok`,
@@ -994,17 +998,20 @@ inventa un codice che il dato non ha.
 codigo, descricao, stato
 ```
 
-`stato` è `DICHIARATO` o `NON_VERIFICATO`. Contenuto iniziale proposto, una
-riga per voce: il file è un derivato e non rientra nell'archivio
-(`DICHIARATO`); l'autore è dichiarato e non autenticato (`DICHIARATO`); le
-colonne `_numero` non sono autorevoli e seguono §7.2.1 (`DICHIARATO`); un
-testo che contenga letteralmente `_xHHHH_` può essere mostrato in modo diverso
-da lettori diversi (`NON_VERIFICATO`); non esiste una sequenza storica dei
-documenti, D17(a) (`DICHIARATO`); la durabilità dell'archivio dopo perdita di
-alimentazione (`NON_VERIFICATO`); l'esclusione fra sorgente e destinazione non
-copre hard link e volumi montati due volte (`NON_VERIFICATO`); con
-`Substituir` concorrente la conservazione del precedente dipende dal lucchetto
-cooperativo (`DICHIARATO`).
+`stato` è `DICHIARATO`, `NON_VERIFICATO` oppure `DIVERGENZA_NOTA`. Contenuto
+iniziale, una riga per voce:
+
+| `codigo` | `stato` | `descricao`, in sintesi |
+|---|---|---|
+| `DERIVADO_SEM_RETORNO` | `DICHIARATO` | il file è un derivato e non rientra nell'archivio |
+| `AUTOR_NAO_AUTENTICADO` | `DICHIARATO` | l'autore è dichiarato, non autenticato |
+| `NUMERO_NAO_AUTORITATIVO` | `DICHIARATO` | le colonne `_numero` non sono autorevoli e seguono §7.2.1; la scala non è promessa in quelle celle |
+| `ESCAPE_LEITOR` | `DIVERGENZA_NOTA` | un testo che contiene una sequenza simile a `_xHHHH_` **già protetta** può essere mostrato diverso: misurato su `openpyxl` 3.1.5, ingresso `_x005F_x0041_` riletto `_x0041_`. L'XML prodotto è corretto, §7.4.1.1 (`EXP-58`) |
+| `EXCEL_NAO_ATESTADO` | `NON_VERIFICATO` | la compatibilità con Microsoft Excel non è attestata: `TX-18` e `TX-19` non eseguite |
+| `SEM_SEQUENCIA_HISTORICA` | `DICHIARATO` | non esiste una sequenza storica dei documenti, D17(a) |
+| `DURABILIDADE_ARQUIVO` | `NON_VERIFICATO` | durabilità dell'archivio dopo perdita di alimentazione |
+| `EXCLUSAO_FONTE` | `NON_VERIFICATO` | l'esclusione fra sorgente e destinazione non copre hard link e volumi montati due volte |
+| `RECUSAR_NAO_ATOMICO` | `DICHIARATO` | con D25(b) `Recusar` non è atomico contro chi ignora il lucchetto; la conservazione del precedente dipende dal lucchetto cooperativo |
 
 #### 6.3.15 Che cosa non viene esportato, e perché
 
@@ -1244,9 +1251,45 @@ reale invece di indovinarlo.
 
 | Requisito | Prova |
 |---|---|
-| un testo che contiene letteralmente `_x0041_` torna **identico** dalla rilettura indipendente del file prodotto da `rust_xlsxwriter` | `TX-37` |
-| se il **testo riletto** differisse dall'originale, **non** si compensa con una trasformazione nostra: si riporta la misura a Luca e D22 si valuta prima di dichiarare la compatibilità | `TX-37`, con l'esito registrato come misura |
-| la compatibilità Excel **non** si dichiara stabile prima di `TX-19` | `TX-19`, prova manuale |
+| un testo che contiene letteralmente `_x0041_` torna **identico** dalla rilettura indipendente del file prodotto da `rust_xlsxwriter` | `TX-37`: **misurato e soddisfatto** il 2026-10-23 |
+| se il **testo riletto** differisse dall'originale, **non** si compensa con una trasformazione nostra: si riporta la misura a Luca e D22 si valuta prima di dichiarare la compatibilità | **avvenuto**: §7.4.4 |
+| la compatibilità Excel **non** si dichiara stabile prima di `TX-19` | `TX-19`, prova manuale, **NON_ESEGUITA** |
+
+### 7.4.1.1 La divergenza nota del lettore — decisione del 2026-10-23
+
+Misurata eseguendo `TX-37` sul percorso reale. Il caso che Luca aveva nominato
+nella condizione di D22 **torna identico**; fallisce un caso ulteriore, un
+testo che contiene già una sequenza di escape protetta.
+
+| Testo logico | XML scritto da `rust_xlsxwriter` 0.101.0 | `openpyxl` 3.1.5 rilegge | Esito |
+|---|---|---|---|
+| `_x0041_` | `_x005F_x0041_` | `_x0041_` | **identico** |
+| `_x005F_x0041_` | `_x005F_x005F_x005F_x0041_` | `_x0041_` | perde un livello |
+
+**Controprova sulla codifica, da conservare.** Un decodificatore a **passata
+singola** della convenzione `ST_Xstring` — la forma corretta — applicato
+all'XML del writer restituisce `_x0041_` per il primo caso e `_x005F_x0041_`
+per il secondo: **esattamente** i testi logici. L'XML prodotto è quindi
+l'escaping giusto, e la perdita viene dal decodificatore del lettore, che su
+quell'ingresso decodifica più di una volta.
+
+**Decisione di Luca, 2026-10-23: strada (a), limite dichiarato.**
+
+| Regola | Contenuto |
+|---|---|
+| **EXP-54** | il caso resta nella prova come **divergenza nota del lettore**, identificata da: confronto, testo in ingresso, lettore con la sua **versione**, risultato osservato, XML del writer, ragione e decisione. Non si elimina |
+| **EXP-55** | `TX-37` **non** si dichiara integralmente superata: lo script la elenca a parte e lo scrive nel proprio esito |
+| **EXP-56** | una divergenza **diversa** da quella registrata è un **errore da esaminare**, e lo script esce con codice diverso da zero. Lo stesso vale se la divergenza registrata **non si presenta più**: la registrazione sarebbe stantia, cioè una falsa dichiarazione, e va aggiornata |
+| **EXP-57** | **nessuna compensazione nel writer** e **nessun rifiuto aggiuntivo** dei dati: il testo si scrive come è, e un dato contabile valido non viene rifiutato per un difetto di un lettore |
+| **EXP-58** | il limite va nel foglio `limites` del workbook prodotto, con il lettore e la versione su cui è misurato |
+
+Le strade (b) — trattare `_x[0-9A-Fa-f]{4}_` come non rappresentabile — e (c)
+— cercare un altro lettore — sono state valutate e scartate: la prima
+rifiuterebbe dati validi per un difetto altrui, la seconda costa una ricerca
+senza esito garantito.
+
+`TX-19` su Excel resta **NON_ESEGUITA**, e `EXP-36` resta in piedi: la
+compatibilità del formato **non** si dichiara stabile.
 
 **Che cosa conta come «trasformazione», con precisione.** Chiarimento del
 controllo mirato del 2026-10-23, che non introduce una decisione nuova: la
@@ -1273,6 +1316,92 @@ libreria dovesse già rifiutarli per conto suo, la nostra validazione arriva
 prima e produce un errore che nomina foglio, riga, colonna e codepoint: una
 diagnostica migliore, non un doppione dannoso. `TX-29` misura quale dei due
 interviene.
+
+#### 7.4.1.1.1 I due casi aggiunti dal confronto campo per campo — 2026-10-30
+
+Il confronto campo per campo richiesto da `R3C41-04` ha portato alla luce due
+confronti che il campionamento precedente non guardava. Nessuno dei due è una
+decisione nuova: `EXP-54`…`EXP-58` li governano già, e qui si registrano le
+misure.
+
+**Caso 1: la frase del limite `ESCAPE_LEITOR`.** La descrizione che il
+workbook dà di sé **cita** la sequenza protetta `_x005F_x0041_`, quindi il
+limite si applica alla frase che lo dichiara. Stessa causa del caso di §7.4.1:
+il lettore decodifica più di una volta.
+
+Non si riscrive la frase per aggirare il lettore. Riscriverla renderebbe la
+prova verde senza cambiare nulla di vero, ed è la forma più sottile della
+compensazione che `EXP-57` vieta.
+
+**Caso 2: il ritorno a capo nudo.** Causa **diversa**, e per questo è una
+registrazione a sé e non viene assorbita nella prima.
+
+| Fatto | Misura del 2026-10-30 |
+|---|---|
+| testo logico | `visto e aceito a\rb`, il motivo dei due eventi del percorso di prova |
+| il modello | lo **accetta**: `U+000D` è nella produzione `Char` di XML 1.0, e `EXP-33` non lo rifiuta |
+| XML del writer | `visto e aceito a_x000D_b` in `xl/sharedStrings.xml`, letto con `zipfile`: è la convenzione `ST_Xstring`, cioè la codifica **corretta** |
+| `openpyxl` 3.1.5 rilegge | `visto e aceito a_x000D_b`, i sette caratteri letterali: **non** decodifica quella sequenza |
+
+Distinzione che conta, e che la prova scrive nel proprio esito: la fedeltà del
+**file** è dimostrata — l'XML è quello giusto — mentre la fedeltà di **questo
+lettore** su un ritorno a capo non lo è. Un carattere XML valido non si
+rifiuta, un writer corretto non si compensa, e `TX-37` non diventa
+integralmente superata.
+
+Le registrazioni sono per **confronto**, cioè per cella: `limites!5:descricao`,
+`decisoes!2:motivo`, `decisoes!3:motivo` e le due attese esplicite
+corrispondenti. Una registrazione che il giro non esercita fa uscire lo script
+con codice diverso da zero, come `EXP-56` chiede per quelle stantie.
+
+#### 7.4.1.1.2 Quando un'eccezione si può concedere — lettura operativa, 2026-10-30
+
+Nessuna decisione nuova: `EXP-54` chiede che la divergenza sia identificata da
+ingresso, lettore, versione e risultato, e `EXP-56` chiede che una divergenza
+**diversa** o una registrazione stantia siano errori. Questa è la lettura
+operativa di quelle due regole, resa necessaria dal residuo del controllo
+mirato.
+
+**Il difetto da evitare.** Concedere l'eccezione perché il lettore restituisce
+il risultato registrato rende indistinguibili due cose diverse:
+
+| Caso in `decisoes!2:motivo` | Nel pacchetto | Una passata di `ST_Xstring` | `openpyxl` 3.1.5 |
+|---|---|---|---|
+| file **corretto** | `visto e aceito a_x000D_b` | `visto e aceito a` + U+000D + `b` — il testo del manifesto | `visto e aceito a_x000D_b` |
+| file **alterato** | `visto e aceito a_x005F_x000D_b` | `visto e aceito a_x000D_b` — quindici caratteri letterali, nessun ritorno a capo | `visto e aceito a_x000D_b` |
+
+Il lettore dice la stessa cosa nei due casi. Nel primo sbaglia lui; nel secondo
+è il file a essere diverso dal manifesto. Il risultato del lettore, da solo,
+non dice quale dei due sia presente: misurato il 2026-10-30 costruendo il
+secondo caso e osservando che la verifica lo accettava.
+
+**Le cinque condizioni, tutte necessarie.** Un'eccezione si concede al **caso
+atteso**, non al risultato osservato:
+
+1. la registrazione appartiene al **modo** di questo giro;
+2. l'**ingresso** registrato è il valore atteso di questo confronto;
+3. il lettore e la sua **versione** sono quelli su cui la divergenza è stata
+   misurata; su una versione diversa va rimisurata, non concessa;
+4. il risultato osservato è quello registrato;
+5. il **pacchetto di questo giro** rappresenta esattamente il valore atteso,
+   verificato leggendo la cella con `zipfile` e `xml.etree` e decodificando
+   `ST_Xstring` a **passata singola**.
+
+Se una condizione manca, il confronto è una **discordanza**: un controllo non
+eseguito non risulta superato. In particolare, se il file rappresenta un valore
+diverso da quello del manifesto, è un difetto del **file**, e resta tale anche
+quando il lettore produce proprio il risultato della sua anomalia nota.
+
+**Che cosa non cambia.** Nessuna trasformazione in più nel writer, nessun
+rifiuto nuovo di un ritorno a capo valido, nessuna deroga aggiunta, e D18, D20
+e D26 restano come sono. La decodifica a passata singola non è un secondo
+lettore: legge le sole celle delle eccezioni registrate, e la §7.4.1 la usava
+già come controprova sulla codifica — qui diventa un controllo eseguito a ogni
+giro invece di una dichiarazione nel rapporto.
+
+La prova permanente è `script/controprova_rilettura.py`: prepara le copie
+alterate, lascia il manifesto invariato, esegue la verifica senza modificarla
+e confronta i codici di uscita attesi con quelli osservati.
 
 ### 7.4.2 Il surrogato isolato non è raggiungibile da qui
 
@@ -1716,7 +1845,7 @@ Le sonde di §5 sono separate e non contano come test del prodotto.
 | **TX-33** | EXP-42, EXP-48 | destinazione uguale al file dell'archivio, esistente e con maiuscole diverse; separatori ripetuti, `..`, prefisso `\\?\`, junction sul padre; e soprattutto le destinazioni **inizialmente assenti** della famiglia con maiuscole diverse: `<nome>.LOCK`, `<nome>.GER1`, `<nome>.NOVO.2`, `<nome>.CORRUPTO7`, `<nome>.RECUPERADO.1`, più `<NOME>` intero | rifiuto con `DestinoECoincideComFonte` **prima** del lucchetto, della rivendicazione, del temporaneo e della copia del precedente; sorgente e intera famiglia invariati, verificati per impronta. I nomi nei messaggi sono quelli dati dal chiamante, non la chiave di confronto. Il caso hard link è eseguito e il suo esito **registrato come misura**, non come attesa | 3C.4.1 |
 | **TX-34** | EXP-43b, EXP-44 | due esecuzioni cooperanti intercalate, con `Recusar` e poi con `Substituir`, negli intrecci che il protocollo ammette | il secondo riceve `ExportOcupado` se arriva mentre il primo tiene il lucchetto, e `DestinoJaExistente` se arriva **dopo** il rilascio con la destinazione esistente: il test copre i due intrecci e non pretende un solo esito. Con `Substituir` serializzati dal lucchetto, ogni precedente effettivamente sostituito è conservato. **Nessuna** destinazione di zero byte compare in nessuno degli intrecci | 3C.4.1 |
 | **TX-34b** | EXP-52 | due pubblicazioni che **ignorano** il lucchetto, intercalate fra il controllo di esistenza e il `rename` | il comportamento è **registrato come misura**, non come garanzia: l'attesa è che la seconda vinca in silenzio, ed è il limite che D25(b) accetta e che `EXP-52` scrive nel foglio `limites`. Un test che pretendesse l'atomicità qui sarebbe un test di una promessa che non facciamo | 3C.4.1 |
-| **TX-37** | EXP-17, EXP-51, D22 | un testo che contiene letteralmente `_x0041_`, più `_x005F_x0041_`, scritti da `rust_xlsxwriter` e riletti dallo strumento indipendente | i valori riletti sono **identici** agli originali. Se non lo fossero, l'esito si registra come misura e D22 si riapre: **non** si compensa con una trasformazione nostra | 3C.4.1 |
+| **TX-37** | EXP-17, EXP-51, EXP-54…EXP-58, D22 | un testo che contiene letteralmente `_x0041_`, più `_x005F_x0041_`, scritti da `rust_xlsxwriter` e riletti dallo strumento indipendente | **eseguita il 2026-10-23**: `_x0041_` torna identico; `_x005F_x0041_` è una **divergenza nota del lettore**, registrata con input, versione e risultato osservato (§7.4.1.1). La prova **non** si dichiara integralmente superata, e una divergenza diversa — o la sua scomparsa — è un errore | 3C.4.1 |
 | **TX-38** | §10.5 | le quattro proprietà richieste alla libreria: scrittura in un buffer in memoria, cella di testo che resta testo, nessuna conversione implicita, comportamento su `_xHHHH_` | ognuna misurata e registrata. Una proprietà che non reggesse **non** si aggira: si riporta a Luca | 3C.4.1 |
 | **TX-35** | EXP-16, §6.3.12 | due eventi identici salvo `alvo.impressao_conteudo.motivo`, uno `None` e uno `Some("motivo dichiarato")` | le due righe del foglio `decisoes` sono **diverse**, e la differenza è nella colonna `alvo_impressao_conteudo_motivo`. È la regressione del riscontro `R3C4-01` | 3C.4.1 |
 | **TX-36** | EXP-30, EXP-31, EXP-32 | archivio con due lotti su conti diversi e piano corrente che copre solo il primo; piano con la sola `versao` diversa; conto rinominato nel piano | l'export del primo lotto **riesce** nonostante il secondo lotto usi un conto fuori dal piano; le due identità del piano sono entrambe nel foglio, con `plano_coincide`; la divergenza del conto rinominato è attribuita allo snapshot giusto | 3C.4.1 |
@@ -1901,7 +2030,7 @@ dell'archivio senza file.
 
 Il lotto è consegnabile per audit soltanto se:
 
-1. ogni contratto `EXP-01…EXP-53`, escluse le varianti decadute `EXP-40`, `EXP-43` ed `EXP-49`, ha almeno una prova che può fallire,
+1. ogni contratto `EXP-01…EXP-58`, escluse le varianti decadute `EXP-40`, `EXP-43` ed `EXP-49`, ha almeno una prova che può fallire,
    **tranne** i quattro di §11.1 e l'inventario di §11.2, che si verificano per ispezione o per riuso e
    sono elencati là con il motivo. La mappa contratto → test, o contratto →
    ispezione, è nel rapporto, e un'ispezione **non** si chiama test superato;
@@ -2016,7 +2145,7 @@ approvabile, è una decisione nuova su D9, da chiedere.
 | **[LETTO_NEL_CODICE]** | `prelivro.rs` (`Particao:303`, `IdentidadeLinha:326`, `LinhaPreLivro:336`, `DocumentoPreLivro:358`, `Resumo:391`, `Exclusao:418`, `Indicadores:427`, `extrato_aprovado:465`, `construir_pre_livro:506`); `revisao.rs` (`ChaveRevisao:90`, `DecisaoAplicada:400`, `EventoNaoAplicado:440`, `VersaoDocumento:459`, `LinhaRevisada:471`, `VistaRevisada:488`, `extrato_revisado:511`, `aplicar_revisao:656`); `arquivo.rs` (`contextos_do_lote:221`, `eventos:230`, `verificar_estrutura:1377`, `verificar_apresentacao:1465`); `arquivo_io.rs` (`observar:503`, `ler:525`, `publicar:557`); `modelos.rs` (`Lancamento:540`, `valor:553`); `alocacao.rs` (`Reconciliacao:270`); `nfe.rs` (`Aviso:147`); `config/csv_columns.yaml` |
 | **[ESEGUITO]** | §10.1 stato di `Cargo.toml`, `Cargo.lock` e cache del registro (103 voci, nessun crate XLSX o ZIP), `cargo metadata --offline`, API di scrittura di `quick-xml`; §5.1 XLSX non compresso scritto a mano e riletto; §5.2 celle numeriche contro celle di testo, e Unicode per code point; §5.3 convenzione `_xHHHH_`; provenienza e versione di Python e `openpyxl` |
 | **[RIUSATO]** | la baseline di 337 test e gli strumenti puliti del lotto 3C.3.b.1, non rieseguiti; le prove `TP-02`, `TP-09`, `TP-13` della persistenza; i test `t3_16_*`, `r1_revogacao_*` della revisione; §3.4 e §3.6 della specifica di persistenza; la contro-prova §1.4 della specifica 3C sul CSV in Excel |
-| **[PROPOSTA]** | i contratti `EXP-01…EXP-53`, escluso `EXP-40` decaduto; le prove `TX-01…TX-38` con `TX-16b` e `TX-34b`; la rappresentazione di D12 in §15.2 |
+| **[PROPOSTA]** | i contratti `EXP-01…EXP-58`, escluso `EXP-40` decaduto; le prove `TX-01…TX-38` con `TX-16b` e `TX-34b`; la rappresentazione di D12 in §15.2 |
 | **[APPROVATO]** | D11(a) e D12(a) dal mandato; **D18–D26** ed **`EXP-29`** da Luca il 2026-10-23, con la condizione posta su D22: §3.3 |
 | **[NON_VERIFICATO]** | il comportamento di Excel (apertura di uno XLSX non compresso, `_xHHHH_`, interi lunghi, file aperto durante la sostituzione); l'esclusione sorgente/destinazione su hard link e volumi montati due volte; i volumi reali; la stima di righe della strada (a); LibreOffice e Google Sheets |
 
@@ -2218,3 +2347,314 @@ appartengono al futuro writer e non sono prove già superate.
 
 **Questo documento non implementa nulla e non chiude la fase 3C.**
 
+
+---
+
+## 19. Appendice di esecuzione — lotto 3C.4.1 (2026-10-23)
+
+Aggiunta **dopo** l'implementazione del primo lotto, autorizzata da
+`PROPOSTA_MANDATO_CLAUDE_FASE3C41_IMPLEMENTAZIONE_20261023.md`, approvata
+esplicitamente da Luca. Il corpo del documento resta quello delle revisioni
+precedenti: qui si registra che cosa è stato attuato, che cosa è stato
+**misurato** e che cosa resta non verificato.
+
+### 19.1 Perimetro effettivo
+
+| Voce | Valore |
+|---|---|
+| Baseline | `9d99832`, con il worktree pulito prima di iniziare |
+| Toolchain | `rustc 1.99.1`, `cargo 1.99.1`: soddisfa l'MSRV 1.88.0 della libreria |
+| File nuovi | `src/export.rs`, `src/xlsx.rs`, `src/export_io.rs`, `tests/export_releitura.rs`, `script/releitura_export.py` |
+| File modificati | `Cargo.toml` (+1 riga), `Cargo.lock`, `src/lib.rs`, `README.md` |
+| Perimetro escluso, verificato intatto | `arquivo.rs`, `arquivo_io.rs`, `revisao.rs`, `impressao.rs`, `prelivro.rs`, `alocacao.rs`, `dinheiro.rs`, `modelos.rs`, `nfe.rs`, `regras.rs`, `main.rs`, i test preesistenti, `config/*`, `samples/*`: `git status` non riporta nessuna modifica |
+| Sei fonti canoniche | invariate, 6/6, confrontate per impronta |
+| Test | **386** totali: 364 unitari nella lib, 3 nel binario, 19 di integrazione. I **337** precedenti restano verdi **senza modifiche**. I quattro in piu' rispetto alla consegna del 2026-10-23 sono le regressioni di `R3C41-01`, `R3C41-02` e `R3C41-03`: §19.7 |
+| Verifiche | `cargo test --locked`, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`: tutte pulite |
+
+I 49 test nuovi: 31 in `export.rs`, 12 in `export_io.rs`, 2 in `xlsx.rs`, 4 in
+`tests/export_releitura.rs`.
+
+### 19.2 La dipendenza, confermata sul pacchetto risolto
+
+`rust_xlsxwriter = { version = "=0.101.0", default-features = false, features = [] }`.
+Versione **puntuale** nel requisito, non solo nel lockfile.
+
+Dieci pacchetti nuovi, con versione, checksum e licenza letti dal lockfile e
+dai manifest in cache — non dedotti.
+
+| Pacchetto | Versione | Licenza | MSRV | Compilato su questo target |
+|---|---|---|---|---|
+| `rust_xlsxwriter` | 0.101.0 | MIT OR Apache-2.0 | 1.88.0 | sì, diretta |
+| `zip` | 9.0.5 | MIT | 1.88 | sì |
+| `flate2` | 1.1.10 | MIT OR Apache-2.0 | 1.67.0 | sì |
+| `zlib-rs` | 0.6.8 | Zlib | 1.75 | sì |
+| `zopfli` | 0.8.4 | Apache-2.0 | 1.88.0 | sì |
+| `crc32fast` | 1.5.3 | MIT OR Apache-2.0 | 1.63 | sì |
+| `simd-adler32` | 0.3.10 | MIT | non dichiarato | sì |
+| `typed-path` | 0.12.4 | MIT OR Apache-2.0 | 1.65.0 | sì |
+| `nix` | 0.31.3 | MIT | 1.69 | **no**: dipendenza di `zip` condizionata a macOS/BSD |
+| `bitflags` | 2.13.2 | MIT OR Apache-2.0 | 1.56.0 | **no**: transitiva di `nix` |
+
+Albero effettivo, misurato con `cargo tree`: `rust_xlsxwriter` → `zip` →
+{ `crc32fast` → `cfg-if`; `flate2` → `zlib-rs`; `indexmap` → `equivalent`,
+`hashbrown`; `memchr`; `typed-path`; `zopfli` → `bumpalo`, `crc32fast`, `log`,
+`simd-adler32` }. `indexmap`, `memchr`, `cfg-if`, `bumpalo` e `log` erano
+**già** nel lockfile e non compaiono fra i dieci aggiunti. Per `nix` e
+`bitflags` `cargo tree -i` risponde «nothing to print» su questo target.
+
+Tutte le licenze sono permissive; tutti gli MSRV sono soddisfatti. Nessun
+`cargo update` generale: le altre dipendenze restano alle versioni del
+lockfile. Nessuna installazione: niente Python, pip, programmi globali o
+toolchain.
+
+La rete è servita **una volta**, per risolvere e scaricare. Il programma
+esportatore non ha requisiti di rete, e le compilazioni successive usano la
+cache.
+
+### 19.3 Mappa dei contratti: da `EXP-nn` alla prova
+
+| Contratto | Prova eseguita |
+|---|---|
+| `EXP-01` | `tx01_treze_folhas_com_as_colunas_fixadas_uma_a_uma`, `tx01_o_percurso_composto_produz_treze_folhas_coerentes` |
+| `EXP-02`, `EXP-03` | `tx02_documento_sem_linhas_*`, `tx03_duas_linhas_com_o_mesmo_payload_*` |
+| `EXP-04`, `EXP-05` | `tx07_rate_componenti_e_campi_*`, `tx07_rata_senza_vencimento_*`, `tx07_documento_senza_rate_*` |
+| `EXP-06`, `EXP-08`, `EXP-37`…`EXP-39` | `tx04_texto_exato_e_celula_numerica_secondo_d26a`, `tx04_celula_numerica_assente_oltre_quindici_cifre`, `tx04_nessuno_zero_tecnico_*`, `cifras_significativas_*` |
+| `EXP-07`, `EXP-53` | ispezione: l'inventario di §19.5, più `tx04_*` |
+| `EXP-09` | `TP-*` della persistenza, riusate; qui `tx17_*` |
+| `EXP-10`, `EXP-11` | `tx04_*`; nessuna formula, verificata su **tutte** le celle dalla rilettura indipendente, modo `export` |
+| `EXP-12`, `EXP-13`, `EXP-14` | `tx08_identificadores_*`, `tx28_tab_lf_e_cr_sobrevivem`, più il modo `export` della rilettura, che dal 2026-10-30 confronta campo per campo: 411 celle, 992 confronti |
+| `EXP-15`, `EXP-16` | `tx11_datas_iso_e_istanti_*`, `tx13_dado_presente_assente_*` |
+| `EXP-17`, `EXP-51`, `EXP-54`…`EXP-58` | `TX-37` nel modo `tx38` della rilettura, con la divergenza nota registrata; `limites_dichiara_la_divergenza_nota_del_lettore` |
+| `EXP-18`, `EXP-33`, `EXP-34`, `EXP-35` | `tx29_carattere_non_rappresentabile_*`, `tx30_testo_al_limite_*` |
+| `EXP-19`, `EXP-24` | `tx17_o_arquivo_fonte_fica_identico`, `tx17_o_arquivo_nao_e_tocado_pelo_export` |
+| `EXP-20`, `EXP-21`, `EXP-23` | `tx14_pacote_vazio_*`, `tx15_residuo_presente_*`, `tx16_destino_ausente_recusar_e_substituir`, `tx16_substituir_non_sovrascrive_*` |
+| `EXP-22`, `EXP-42`, `EXP-48` | `tx33_destino_che_coincide_con_la_fonte_e_recusado`, `tx33_percorsi_equivalenti_*`, `chave_de_nome_*`, `r1_alias_8_3_da_fonte_e_da_sua_familia_e_recusado`, `r3_percorso_relativo_semplice_e_utilizzabile` |
+| `EXP-25`, `EXP-28` | `tx20_duas_derivacoes_dao_o_mesmo_conteudo` |
+| `EXP-26` | **[RIUSATO]**: l'ordine viene da `prelivro` e `revisao`; `tx20_*` lo verifica di riflesso |
+| `EXP-27` | non va provato: è la dichiarazione che l'identità dei byte **non** è promessa |
+| `EXP-29` | `script/releitura_export.py`, due modi, con codice di uscita controllato |
+| `EXP-30`, `EXP-31`, `EXP-32` | `tx36_sub_arquivo_restringe_lo_scope_*`, `tx36_due_identita_del_piano_*`, `tx26_sub_arquivo_de_un_lote_inesistente_*` |
+| `EXP-41` | `tx32_revisao_do_arquivo_e_testo_esatto` |
+| `EXP-43b`, `EXP-44`, `EXP-52` | `tx34_lucchetto_tenuto_da_un_altro_*`, `tx34b_nessuna_destinazione_di_zero_byte_*` |
+| `EXP-45` | l'etichetta è un parametro di `escrever`: verificata da ogni `tx16_*`, che la usa per nominare temporaneo e precedente |
+| `EXP-46`, `EXP-47` | `tx21_aprovado_por_e_quem_apre_lapprovazione_attiva`, `tx21_estratto_contiene_solo_*`, più il percorso composto |
+| `EXP-49` | **decaduto** con D25(b); `tx34b_*` prova che nessun residuo a zero byte è possibile |
+| `EXP-50` | irraggiungibile dall'API tipizzata: dichiarato, non provato |
+| D21, gli eventi non filtrati | `tx22_eventi_di_altri_lotti_compaiono_come_alvo_ausente` |
+
+Prove **non eseguite**, dichiarate tali: `TX-18` e `TX-19` su Microsoft Excel,
+`TX-31` sul limite ZIP64, `TX-16b` su un file tenuto da un handle
+`FileShare.None`. Nessuna è presentata come coperta.
+
+### 19.4 I fatti misurati sulla libreria
+
+| Proprietà di §10.5 | Esito |
+|---|---|
+| scrive in un **buffer in memoria** | **confermata**: `Workbook::save_to_buffer` usa un `Cursor` su un `Vec<u8>`, letto nel sorgente in cache. Il test verifica anche che la directory di lavoro non cambi |
+| una cella di testo resta **testo** | **confermata** dalla rilettura indipendente: `=`, `+`, `-`, `@` tornano di tipo stringa, e in nessun foglio esiste una cella di tipo formula |
+| nessuna conversione implicita | **confermata**: il testo autorevole torna identico, scale comprese |
+| comportamento su `_xHHHH_` | **misurato**, con la divergenza nota di §7.4.1.1 |
+
+Due fatti che la sola lettura della documentazione non dava:
+
+1. `escape_xml_escapes` della libreria **protegge** una sequenza `_x`
+   letterale, e converte i caratteri di controllo in `_xHHHH_`. La codifica
+   dentro il pacchetto è sua, e il writer non ne aggiunge nessuna: è la
+   condizione posta su D22.
+2. Con `zip/deflate` il pacchetto prodotto è **compresso**. La sonda di §5.1,
+   che scriveva un XLSX `stored` a mano, resta valida come fatto sul formato,
+   ma il file di questo lotto è un altro contenitore. D23 non promette i byte,
+   e questo lo conferma.
+
+### 19.5 L'inventario di `f64`, obbligo di §11.2
+
+Dopo D26(a) il divieto non è assoluto, quindi non si verifica cercando «zero
+occorrenze»: si verifica che le occorrenze siano **esattamente** quella
+autorizzata.
+
+| File | Occorrenze di `f64`, `to_f64`, `as f64`, `write_number` |
+|---|---|
+| `src/export.rs` | **nessuna** |
+| `src/export_io.rs` | **nessuna** |
+| `src/xlsx.rs` | **due**, entrambe dentro `escrever_numero_de_comodo`: `valor.to_f64()` e `folha.write_number(...)` |
+
+**L'inventario ha trovato una deviazione reale, corretta.** Nella prima
+stesura la conversione stava in `pacote`, cioè nel chiamante: la funzione
+autorizzata riceveva già un `f64`. Formalmente `EXP-53` era violato dalla riga
+che converte. La funzione riceve ora un `Decimal` e converte **dentro di sé**,
+e l'inventario torna. È il tipo di difetto che un'ispezione trova e che
+`TX-04` non avrebbe visto, perché il comportamento era corretto.
+
+### 19.6 Che cosa resta `NON_VERIFICATO`
+
+| Affermazione | Perché non è provata |
+|---|---|
+| Microsoft Excel apre il file e mostra le celle come atteso | `TX-18` non eseguita: nessun Excel nell'ambiente |
+| Excel decodifica `_xHHHH_` | `TX-19` non eseguita. Finché resta tale, `EXP-36` vieta di dichiarare stabile la compatibilità, e il foglio `limites` lo scrive nel file |
+| il limite ZIP64 | `TX-31` non praticabile su dati sintetici di questa dimensione |
+| un file di destinazione tenuto da un altro programma | `TX-16b` non eseguita |
+| volumi reali | il lotto di prova ha un documento |
+| l'esclusione sorgente/destinazione su hard link e volumi montati due volte | dichiarato in `EXP-42`; il foglio `limites` lo riporta |
+| la divergenza del lettore su `_x005F_x0041_` in altri lettori | misurata su `openpyxl` 3.1.5 e su nessun altro |
+| la divergenza del lettore sul ritorno a capo in altri lettori | §7.4.1.1.1: misurata su `openpyxl` 3.1.5. L'XML del writer e' corretto, quindi la fedelta' del **file** resta dimostrata |
+| l'esclusione per identita' su un volume che **non** genera alias 8.3 | il caso di `R3C41-01` non e' riproducibile la': il test lo dichiara `NON_ESEGUITO` e stampa il motivo, invece di simulare un successo |
+
+### 19.7 Audit indipendente del 2026-10-30, e le quattro correzioni
+
+Esito dell'audit: **NON SUPERATO**, quattro rilievi più due correzioni
+documentali non bloccanti. Nessuna decisione approvata è stata cambiata,
+nessun contratto è stato indebolito, e il perimetro è rimasto quello del
+mandato. Nessun commit e nessun push durante la correzione, come l'audit
+prescrive.
+
+Ogni rilievo è stato **riprodotto prima** di essere corretto, e dove la
+riproduzione richiedeva una prova negativa è stata eseguita disattivando
+temporaneamente la correzione in una copia locale, mai con comandi Git.
+
+| Rilievo | Difetto reale | Correzione | Riproduzione |
+|---|---|---|---|
+| **R3C41-01** (P1) | `verificar_exclusao` confrontava i nomi solo **lessicalmente**: l'alias 8.3 della fonte — `ARQUIV~1.JSO` per `arquivo_autoritativo_longo.json` — nomina lo **stesso file** e passava il controllo. Con `Substituir` l'archivio autorevole veniva sostituito dall'export, con esito dichiarato riuscito | due confronti, non uno: **per identità** sui percorsi che **esistono**, con `fs::canonicalize` su destino, file della fonte e directory, e il nome della famiglia confrontato sul nome **risolto**; **per chiave lessicale** per i nomi che non esistono ancora, dove nessuna canonicalizzazione è possibile. Entrambi prima di creare lucchetto o temporaneo | `r1_alias_8_3_da_fonte_e_da_sua_familia_e_recusado`: chiede a `cmd` l'alias 8.3 reale della fonte e di un membro della famiglia, verifica il rifiuto, l'invarianza byte per byte e che la directory non contenga nulla di nuovo; verifica anche che un nome breve **estraneo** resti ammesso. Disattivando il confronto per identità il test osserva una `Escrita` riuscita sull'archivio: il difetto c'era |
+| **R3C41-02** (P1) | `U+FFFE` e `U+FFFF` non sono nella produzione `Char` di XML 1.0 e il modello li accettava | il predicato `nao_representavel` li include, con la produzione citata nel commento | `r2_u_fffe_e_u_ffff_non_sono_rappresentabili` ha fallito prima della correzione; `r2_unicode_valido_resta_ammesso` fissa che tab, LF, CR, `U+D7FF`, `U+E000`, `U+FFFD` e `U+1FFFE` **restano** ammessi |
+| **R3C41-03** (P2) | `Path::new("relativo.xlsx").parent()` è `Some("")`, non `None`: il fallback su `.` non interveniva e `canonicalize("")` falliva con `NotFound`. Un nome semplice, che è un percorso legittimo, veniva rifiutato per un errore di IO inventato | `diretorio_do_destino` tratta il parent **vuoto** come directory corrente. Nessun vincolo nuovo di soli percorsi assoluti, e nessun rinvio del problema al chiamante CLI | `r3_percorso_relativo_semplice_e_utilizzabile`: fissa il fatto su `parent()`, verifica il nome semplice e `./nome`, e verifica che una fonte raggiunta per percorso relativo resti **protetta** |
+| **R3C41-04** (P2) | il modo `export` della rilettura confrontava **32** valori a campione: una mutazione di un totale, di una chiave, di uno stato, di un autore o di un motivo poteva passare | confronto **campo per campo** contro un **manifesto** del modello depositato dal test di integrazione, più un insieme di **attese esplicite** scritte a mano. Misurato: 13 fogli, 411 celle, **992** confronti. `--modo export` senza `--manifesto` esce con 2 e dichiara la verifica non eseguita | contro­prova delle mutazioni su copie fuori dal repository: totale testuale, totale numerico, chiave, stato, autore, motivo e indicatore. Sette mutazioni, sette uscite con codice 1, e ognuna nomina la cella attesa |
+
+**`TX-27` chiedeva già la forma giusta.** §17 la descrive come «confronto
+**campo per campo** fra il modello in memoria e ciò che il lettore
+restituisce». La prima stesura del modo `export` se n'era discostata senza
+dirlo, e `R3C41-04` è esattamente quello scostamento: non una richiesta nuova,
+ma un contratto già scritto e non attuato. Il mio audit interno del 2026-10-23
+non l'ha visto, ed è un difetto del mio controllo, non della specifica.
+
+**Due difetti dell'intestazione, già presenti in `9d99832`.** Un frammento di
+riga di tabella, «| il comportamento di Excel sul file prodotto, su», era
+incollato davanti al titolo `# Specifica fase 3C.4`, e la riga `Stato` non
+aveva la barra di chiusura. Vengono da una mia giunzione mal fatta di una
+revisione precedente. Il frammento non appartiene a nessuna tabella del
+documento — nessun'altra riga risulta troncata — e il suo contenuto è già
+detto per intero in §17 e in §19.6, righe su `TX-18` e `TX-19`. Corretti
+entrambi; nessun altro testo è stato rimosso.
+
+**Perché il manifesto non basta da solo, e che cosa lo sorveglia.** Il
+manifesto nasce dallo stesso modello che genera il file: se il modello
+cambiasse un totale, il manifesto cambierebbe con lui e il confronto campo per
+campo non se ne accorgerebbe. Quel confronto misura quindi la fedeltà della
+coppia writer + lettore. Le attese esplicite sono invece trascritte a mano dai
+valori noti del percorso di prova — metadati, testo ostile, assenze, totali,
+chiave, conta, stato di revisione, autore attivo, conferma, decisioni,
+indicatori per nome e i nove limiti con il loro stato — e sorvegliano il
+modello. I due livelli hanno fallito entrambi su ogni mutazione della
+controprova.
+
+**Che cosa ha trovato il confronto nuovo.** Due divergenze del lettore che il
+campionamento non guardava, registrate in §7.4.1.1.1: la frase del limite
+`ESCAPE_LEITOR`, che cita la sequenza protetta, e il ritorno a capo nudo del
+motivo, di causa diversa. Il confronto non si dichiara integralmente superato
+quando una divergenza registrata si presenta.
+
+| Correzione documentale | Da | A |
+|---|---|---|
+| conteggio dei pacchetti, in `README.md` e nel mandato | «nove pacchetti transitivi compilati e due bloccati» | dieci pacchetti nuovi nel lockfile, **otto** compilati su questo target — dipendenza diretta compresa — e due solo bloccati. `log` e `bumpalo` erano già nel lockfile: compilarli di nuovo non è aggiungere un pacchetto. §19.2 era già corretta |
+| §6.3.9 | «una riga larga sedici colonne», «le sedici righe attese» seguite da un elenco di quindici e da «Sono quindici» | «quindici» in entrambe le frasi. Corretta la frase, non l'elenco, che era giusto |
+
+Verifiche rieseguite dopo le correzioni, tutte pulite: `cargo test --locked`
+(**386** test: 364 nella lib, 3 nel binario, 19 di integrazione), `cargo fmt
+--check`, `cargo clippy --locked --all-targets -- -D warnings`,
+`git diff --check`. I **337** test precedenti restano verdi senza modifiche, le
+sei fonti canoniche restano invariate e il perimetro escluso resta intatto.
+Rilettura indipendente rieseguita nei due modi: `tx38` con 68 confronti e una
+divergenza nota, uscita **0**; `export` con 992 confronti e cinque divergenze
+note, uscita **0**; `export` senza manifesto, uscita **2**.
+
+### 19.8 Controllo mirato del 2026-10-30, e il residuo chiuso
+
+| Voce | Valore |
+|---|---|
+| Esito del controllo | `R3C41-01`, `R3C41-02`, `R3C41-03` **CHIUSI**; `R3C41-04` migliorato con **un residuo** riprodotto nello script di verifica |
+| Natura del residuo | P2, bloccante per l'attestazione di fedeltà: `Esito.confronta` concedeva l'eccezione sul **solo** risultato di `openpyxl`, senza verificare che cosa il pacchetto rappresenti. `xml_del_writer` era una dichiarazione stampata nel rapporto, non un controllo eseguito |
+| Codice Rust | **invariato** in questo giro. Il residuo vive interamente nel confine di verifica |
+| Decisioni | nessuna nuova. §7.4.1.1.2 è la lettura operativa di `EXP-54` ed `EXP-56` |
+| Git | nessun commit e nessun push |
+
+**Riproduzione, prima della correzione.** Copia del workbook depositato dai
+test, manifesto **invariato**, una sola cella riscritta: una voce nuova nelle
+stringhe condivise con il testo codificato `visto e aceito a_x005F_x000D_b`, e
+`decisoes!2:motivo` indirizzata a quella voce. ZIP riscritto con i CRC
+ricalcolati. Lo script di allora: **411 celle, 992 confronti, 5 divergenze
+note, 0 discordanze, uscita 0**. L'eccezione veniva concessa due volte alla
+cella alterata, una nel confronto col manifesto e una nelle attese esplicite.
+
+La controprova non afferma che il writer produca quel dato: dimostra che la
+verifica non distingueva un difetto del file dal limite del lettore che
+dichiara.
+
+**Correzione.** `script/releitura_export.py`:
+
+| Elemento | Contenuto |
+|---|---|
+| `Pacote` | legge le celle delle sole eccezioni registrate con `zipfile` e `xml.etree`; risolve i fogli dalle **relazioni** del pacchetto, non dall'ordine dei file |
+| `decodifica_passata_singola` | la decodifica corretta di `ST_Xstring`, da sinistra a destra e senza sovrapposizioni: `a_x000D_b` → ritorno a capo, `a_x005F_x000D_b` → quindici caratteri letterali |
+| `Esito._valuta_eccezione` | le cinque condizioni di §7.4.1.1.2. Se una manca, discordanza che nomina il motivo |
+| registrazioni | ognuna dichiara la **cella** su cui verificare il pacchetto. La riga del caso di `tx38` si calcola dall'elenco delle prove, non è scritta a mano |
+| rapporto | stampa l'XML **misurato** in questo giro accanto a quello dichiarato alla registrazione |
+
+Il criterio vale per **tutte** le eccezioni registrate, compresa quella della
+frase `ESCAPE_LEITOR`: nessuna deroga aggiunta.
+
+**Prova permanente: `script/controprova_rilettura.py`.** Prepara le copie,
+lascia il manifesto invariato, esegue la verifica senza modificarla e confronta
+i codici di uscita. Esito del 2026-10-30, dopo la correzione:
+
+| Caso | Atteso | Osservato |
+|---|---|---|
+| baseline non alterata | 0, con i limiti dichiarati | **0** |
+| baseline senza `--manifesto` | 2 | **2** |
+| sette mutazioni ordinarie: totale testuale, totale numerico, chiave, stato, autore, motivo, indicatore | 1, con la cella nominata | **1**, cella nominata 7/7 |
+| `mascherata_cr`, su `decisoes!2:motivo` | 1, con la cella nominata | **1**, «il **file** rappresenta `visto e aceito a_x000D_b` — nel pacchetto `visto e aceito a_x005F_x000D_b` — e non il valore atteso» |
+| `mascherata_escape`, su `limites!5:descricao`, con un livello di protezione in meno | 1, con la cella nominata | **1**, con lo stesso motivo |
+
+Nelle due alterazioni mascherate `openpyxl` restituisce **esattamente** il
+risultato registrato: la condizione 4 è soddisfatta, e sono le condizioni sul
+pacchetto a respingerle. È la prova che il controllo nuovo è quello che lavora.
+
+**Condizione 3, esercitata.** Una sonda carica lo script come modulo con la
+versione di `openpyxl` sostituita da `9.9.9-sonda`: tutte e cinque le
+eccezioni passano a discordanza, con «va rimisurata prima di essere concessa»,
+e l'uscita è 1. Una divergenza misurata su una versione non si concede su
+un'altra.
+
+**Modo `tx38`, rieseguito.** 68 confronti, una divergenza nota, uscita 0, e il
+rapporto ora stampa l'XML misurato — `'_x005F_x005F_x005F_x0041_'` — accanto a
+quello dichiarato: coincidono, quindi il file conserva l'ingresso e la perdita
+è del lettore.
+
+Verifiche del codice Rust rieseguite e invariate: `cargo test --locked` 386
+verdi, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D
+warnings`, `git diff --check` puliti. Le sei fonti canoniche restano invariate.
+
+I limiti già dichiarati — Excel, ZIP64, volumi reali, hard link, altri
+ambienti e altri lettori — questo controllo non li riapre e non li trasforma
+in prove superate.
+
+### 19.9 Esito finale indipendente e registrazione autorizzata (2026-10-30)
+
+Codex ha verificato il confine corretto: la baseline viene accettata con i
+limiti dichiarati; senza manifesto la verifica esce con 2; le sette mutazioni
+ordinarie e le due mascherate vengono tutte respinte con 1 e cella nominata.
+Anche il controesempio indipendente dell'audit precedente viene ora respinto,
+e una versione del lettore diversa non puo' beneficiare delle eccezioni.
+
+**AUDIT SUPERATO: R3C41-01..04 chiusi.** I tre moduli Rust e il test di
+integrazione erano byte-identici al controllo precedente: Codex ha riusato
+la baseline verificata di 386 test, senza una nuova compilazione. Claude ha
+poi riferito una riesecuzione completa con gli stessi esiti dopo aver liberato
+spazio. Le due provenienze restano distinte: riesecuzione di Claude e riuso
+motivato di Codex, non due suite eseguite da Codex.
+
+Luca ha risposto «PRECODIAMO» alla proposta di pulizia mirata e registrazione
+nei due gruppi. Sono autorizzati i commit locali di codice e documentazione;
+il push resta escluso da questo passaggio. Il codice auditato e' invariato:
+si aggiornano soltanto le etichette documentali e la continuita' nel mandato.
+
+TX-18 e TX-19 restano NON_ESEGUITE. La verifica in Microsoft Excel del
+campione sintetico e' il passo operativo successivo; l'audit non avvia CLI,
+DRE o produzione contabile e non rimuove gli altri limiti dichiarati.
