@@ -23,7 +23,9 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 | 3C.3.a | Impressoes canonicas (`impressao.rs`) e revisao pura em memoria (`revisao.rs`) | **PRONTA**: audit tecnico independente **superado** em 2026-10-21 (R3C3A-01/02/03 fechados), registrada em Git |
 | 3C.3.b — especificacao | Persistencia do arquivo autoritativo: formato, codec, protocolo de publicacao e recuperacao | **PRONTA** (`SPECIFICA_FASE3C3B_PERSISTENZA_ARCHIVIO.md`, revisao 3): audit tecnico superado em 2026-10-22; D14–D17 **aprovadas** na opcao (a) |
 | 3C.3.b.1 | Arquivo autoritativo em JSON (`arquivo.rs`) e protocolo de IO (`arquivo_io.rs`) | **AUDIT TECNICO INDEPENDENTE SUPERADO** em 2026-10-22: quatro achados (R3C3B1-01/02/03/04) levantados, corrigidos e **fechados** pelo audit dirigido. Falta so' o registro em Git autorizado |
-| 3C.4 | Adaptadores de entrada bruta, exportacao para Excel/CSV | NAO_INICIADA |
+| 3C.4 — especificacao | Export derivado: esquema, fidelidade, protocolo de escrita | **PRONTA** (`SPECIFICA_FASE3C4_EXPORT_DERIVATO.md`): decisoes aprovadas e esito final do audit registrados |
+| 3C.4.1 | Export XLSX derivado: modelo (`export.rs`), adaptador (`xlsx.rs`), escrita (`export_io.rs`) | **AUDIT TECNICO INDEPENDENTE SUPERADO** em 2026-10-30: R3C41-01..04 fechados, inclusive o residuo da releitura. Compatibilidade Excel continua **NON_VERIFICATO** |
+| 3C.4.2 | Adaptadores de entrada bruta (D12), import do historico (D11) | NAO_INICIADA: D11(a) e D12(a) adiaram ambos |
 | 3C.5 | Uso pela CLI | NAO_INICIADA |
 | 3D | DRE gerencial por competencia | NAO_INICIADA |
 
@@ -346,6 +348,85 @@ registro:
    tambem a geracao conservada, que D16 proibe sobrescrever. Esta' em
    `tp15b_rollback_intencional_e_declarado_nao_renumerado`.
 
+### Fase 3C.4.1 - export XLSX derivado
+
+Tres modulos com responsabilidades separadas. `export.rs` e `xlsx.rs` sao
+**puros**: nao abrem ficheiros, nao leem o relogio e nao conhecem caminhos.
+`export_io.rs` faz IO e nao decide nada sobre o conteudo.
+
+O arquivo JSON continua **autoritativo** (D7(a)): o workbook e' um derivado e
+**nao** tem caminho de retorno. O proprio ficheiro o declara, na folha
+`limites`.
+
+| Contrato | O que garante | Onde | Teste |
+|---|---|---|---|
+| EXP-01 | `FANTOZZI-EXPORT/v1` com treze folhas e as colunas fixadas: acrescentar, tirar ou mover uma coluna exige `v2` | `export.rs` | `tx01_*` (dois testes, um deles no percurso composto) |
+| EXP-02/03 | cada linha do pre-livro aparece uma vez; cada documento aparece em `documentos`, **mesmo sem linhas** | `export.rs` | `tx02_*`, `tx03_*` |
+| EXP-04/05 | nenhuma lista aninhada e' esmagada: rate, componentes e campos reenviados tem folha propria com a chave do pai; uma lista vazia **nao** produz linhas | `export.rs` | `tx07_*` (tres testes) |
+| EXP-06/39 | o importo autoritativo e' **texto exato** com a escala; a celula numerica de comodo e' igual **em valor** no dominio elegivel, e a escala nao e' prometida nela | `export.rs` | `tx04_*` (tres testes) |
+| EXP-07/53 | `f64` **so** na funcao de `xlsx.rs` que escreve a celula de comodo. Inventario obrigatorio abaixo | `xlsx.rs` | inspecao mais `tx04_*` |
+| EXP-37/38 | a **coluna** existe sempre, a **celula** pode faltar: elegivel ate' 15 cifras significativas, ausencia com estado e motivo, **nunca** um zero substituto | `export.rs` | `tx04_celula_numerica_assente_*` |
+| EXP-12/13/14 | identificadores textuais com zeros; `=`, `+`, `-`, `@`, aspas, LF, tab e Unicode conservados; NFC e NFD distintos | `export.rs`, `xlsx.rs` | `tx08_*`, `tx28_*`, mais a releitura independente |
+| EXP-15/16 | datas ISO como texto; instantes em **duas** colunas, local e offset em segundos; cada `Dado` em **quatro** colunas | `export.rs` | `tx11_*`, `tx13_*` |
+| EXP-18/33/34/35 | validacao de representabilidade **no confine**: um carattere que XML 1.0 nao representa e' um erro nomeado antes do commit, e um texto acima do limite da celula **nao** e' truncado | `export.rs` | `tx29_*`, `tx30_*` |
+| EXP-30/31/32 | o controlo de apresentacao corre no **sub-arquivo do lote**; a validacao estrutural fica em `arquivo_io::ler`; a folha leva **duas** identidades do plano | `export.rs` | `tx36_*` (dois testes), mais o percurso composto |
+| EXP-41 | identificadores numericos — `arquivo_revisao`, `versao_schema` — sao **texto**: o dominio passa as 15 cifras de Excel | `export.rs` | `tx32_*` |
+| EXP-46/47 | `aprovado_por` e' quem **abre** a aprovacao activa, isto e' a primeira `Aprovar` depois da ultima `Revogar`; as repeticoes tem colunas e nome proprios | `export.rs` | `tx21_*` (dois testes), mais o percurso composto |
+| EXP-20/21/23/24 | um so' ponto de commit; o residuo e' nomeado e **nao** apagado; `Recusar`/`Substituir` declarados pelo chamante; o arquivo fonte nunca e' aberto em escrita | `export_io.rs` | `tx14_*`, `tx15_*`, `tx16_*`, `tx17_*` |
+| EXP-42/48 | o destino nao pode ser o arquivo nem cair na sua **familia de nomes**, com a chave de comparacao insensivel as maiusculas e o reconhecimento por **prefixo** | `export_io.rs` | `tx33_*` (dois testes) |
+| EXP-43b/44/52 | `Recusar` **controla** a existencia e nao reivindica o nome final, logo nenhum destino de zero bytes fica; o lucchetto cooperativo serializa as execucoes; o limite de nao atomicidade esta' declarado no ficheiro | `export_io.rs` | `tx34_*`, `tx34b_*` |
+| EXP-54…58 | as divergencias conhecidas do leitor ficam registadas uma por confronto, com entrada, versao e resultado; `TX-37` **nao** se declara integralmente superada; nenhuma compensacao no writer e nenhum dado recusado a mais | `script/releitura_export.py`, folha `limites` | `limites_dichiara_*`, o script |
+| EXP-54/56, leitura operativa | uma excepcao concede-se ao **caso esperado**: modo, entrada, leitor e versao da medicao, resultado registado, e o **pacote deste giro** a representar o valor esperado em passagem unica. Falta uma condicao, e e' discordancia | `script/releitura_export.py` (`Pacote`, `_valuta_eccezione`) | `script/controprova_rilettura.py`: duas alteracoes mascaradas recusadas, sonda da versao do leitor |
+| EXP-25/26 | determinismo dos **conteudos e da ordem**, nao dos bytes do ZIP | `export.rs` | `tx20_*` |
+
+Superficie publica nova:
+
+```rust
+// export.rs — puro
+pub fn modelo(&VistaRevisada, &Proveniencia) -> Result<ModeloExport, ErroExport>;
+pub fn sub_arquivo_do_lote(&Arquivo, lote: &str) -> Result<Arquivo, ErroExport>;
+pub struct Proveniencia { /* duas identidades do plano, EXP-32 */ }
+pub struct ModeloExport { pub folhas: Vec<Folha> }
+pub enum Celula { Texto(String), NumeroDeComodo(Decimal), Vazia }
+
+// xlsx.rs — puro
+pub fn pacote(&ModeloExport) -> Result<Vec<u8>, ErroXlsx>;
+
+// export_io.rs — IO
+pub enum SeExistir { Recusar, Substituir }
+pub struct FonteProtegida { pub diretorio: PathBuf, pub nome: String }
+pub fn escrever(&Path, pacote: &[u8], SeExistir, &FonteProtegida,
+                etiqueta: &str, &MetadadosLucchetto) -> Result<Escrita, ErroExportIo>;
+```
+
+**Inventario de `f64` nos tres modulos novos** (`EXP-07`, `EXP-53`, §11.2 da
+especificacao). Depois de D26(a) o proibicao nao e' absoluta, logo nao se
+verifica procurando «zero ocorrencias»: verifica-se que as ocorrencias sejam
+**exactamente** a autorizada.
+
+| Ficheiro | Ocorrencias |
+|---|---|
+| `src/export.rs` | **nenhuma** |
+| `src/export_io.rs` | **nenhuma** |
+| `src/xlsx.rs` | **duas**, ambas dentro de `escrever_numero_de_comodo`: `valor.to_f64()` e `folha.write_number(...)` |
+
+A funcao recebe um `Decimal` e converte **dentro de si**: se o chamador
+convertesse, a linha que converte violaria `EXP-53`. O inventario inicial
+encontrou exactamente esse desvio, e a correccao esta' no codigo.
+
+**Dois factos medidos sobre a biblioteca**, que a leitura da documentacao nao
+dava:
+
+1. `Workbook::save_to_buffer()` escreve num `Cursor` em memoria, logo o modulo
+   puro fica puro. Confirmado por `TX-38` e pelo teste que verifica que a
+   directoria de trabalho nao muda.
+2. `rust_xlsxwriter` **protege** uma sequencia `_x` literal e converte os
+   caracteres de controlo em `_xHHHH_`: a codificacao dentro do pacote e' dela,
+   e o writer nao acrescenta nenhuma transformacao propria (`EXP-17`, condicao
+   de D22). O XML que produz e' correcto: uma descodificacao de **passagem
+   unica** reconduz ao texto logico. O leitor disponivel descodifica mais de uma
+   vez num caso patologico, e isso e' a divergencia conhecida de `EXP-54`.
+
 O Python so le `regras` e `conta_fallback_id`. C13 torna visivel o resto:
 
 - `regras_por_fornecedor` (1 regra: fornecedor com descricao generica "KILOS")
@@ -439,6 +520,7 @@ atualizada junto com uma decisao declarada sobre as regras.
 | `unicode-normalization` | NFD + remocao de acentos | equivalente de `unicodedata` do Python |
 | `sha2` | `hash_registro` dos lancamentos (3B) e impressoes canonicas (3C.3.a) | adicionada em 2026-10-16 com autorizacao explicita; mesmo payload de quatro campos do Python, para que os codigos continuem comparaveis com o historico |
 
+| `rust_xlsxwriter` | formato do export derivado (3C.4.1) | adicionada em 2026-10-23 com autorizacao explicita, versao fixada `=0.101.0`, `default-features = false`. Licenca MIT OR Apache-2.0, MSRV 1.88.0. Trouxe dez pacotes novos no lockfile: oito compilados neste alvo (incluida a dependencia direta) e dois so' bloqueados, `nix` e `bitflags`, condicionados a outros alvos. `log` e `bumpalo` ja' estavam no lockfile: compilar de novo nao e' acrescentar um pacote. Detalhe em §19.2 da especificacao |
 | `serde_json` | formato do arquivo autoritativo (3C.3.b.1) | adicionada em 2026-10-22 com autorizacao explicita. Ja' estava em `Cargo.lock` como dependencia **opcional** de `rust_decimal` e na cache local, logo o `diff` do lockfile e' de **uma linha** e nada foi baixado |
 
 A fase 3C.3.a **nao acrescentou nenhuma dependencia**: `sha2`, `chrono` (com
@@ -452,6 +534,28 @@ formato proprio: a garantia que o arquivo precisa — recusar uma chave
 duplicada, recusar um campo desconhecido — vem de struct com
 `deny_unknown_fields`, que um parser escrito a mao teria de reimplementar.
 
+A 3C.4.1 acrescentou **uma**, `rust_xlsxwriter = "=0.101.0"` com
+`default-features = false`, autorizada por D18. Foi a primeira aquisicao que
+exigiu **rede**: o crate nao estava em cache, e nenhum crate ZIP ou de
+compressao estava. A rede serviu **uma vez**, para resolver e descarregar; nem
+a cada compilacao, nem nunca a tempo de execucao do programa.
+
+Dez pacotes novos, com versao, checksum e licenca lidos do lockfile e dos
+manifests em cache — nao deduzidos. **Nove** compilam neste alvo:
+`rust_xlsxwriter`, `zip` 9.0.5, `flate2`, `zlib-rs`, `zopfli`, `crc32fast`,
+`simd-adler32`, `typed-path`, mais os que ja' estavam. **Dois** ficam
+bloqueados no lockfile e **nao** compilam no Windows: `nix` 0.31.3, dependencia
+de `zip` condicionada a macOS/BSD, e `bitflags`, transitiva dela. `cargo tree
+-i` confirma: «nothing to print» para ambos.
+
+Todas as licencas sao permissivas — MIT, MIT OR Apache-2.0, Zlib, Apache-2.0 —
+e todos os MSRV sao satisfeitos pela toolchain 1.99.1.
+
+Consequencia a declarar: com `zip/deflate` o workbook produzido e'
+**comprimido**. A sonda da especificacao que escreveu um XLSX `stored` a mao
+continua valida como facto sobre o formato, mas o ficheiro deste lote e' outro
+contentor — e D23 nao promete os bytes.
+
 ## Verificacao
 
 ```bash
@@ -460,21 +564,85 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-337 testes: 319 de unidade na lib, 3 no binario, 15 de integracao (13 de CLI e
-2 de persistencia entre processos). Os 70 novos sao da fase 3C.3.b.1 (47 em
-`arquivo.rs`, 21 em `arquivo_io.rs`, 2 em
-`tests/persistencia_entre_processos.rs`); os 267 anteriores continuam verdes
-**sem nenhuma alteracao**.
+386 testes: 364 de unidade na lib, 3 no binario, 19 de integracao (13 de CLI,
+2 de persistencia entre processos e 4 do percurso composto do export). Os 49
+novos sao da fase 3C.4.1 (31 em `export.rs`, 12 em `export_io.rs`, 2 em
+`xlsx.rs`, 4 em `tests/export_releitura.rs`), e quatro deles sao as regressoes
+dos rilevos `R3C41-01`, `R3C41-02` e `R3C41-03` do audit de 2026-10-30; os 337
+anteriores continuam verdes **sem nenhuma alteracao**.
 
-Treze desses 70 sao regressoes dos quatro achados do audit de 2026-10-22
-(R3C3B1-01/02/03/04), escritas **antes** da correcao e com as expectativas
-corretas: falharam — tres por asserccao e uma por panico no proprio caminho de
-erro —, depois passaram. Os quatro sao reproduziveis pela API publica.
+A prova de releitura independente **nao** corre com `cargo test`: um teste
+deposita o workbook e termina, e o confronto e' um comando separado (`EXP-29`).
+Nenhum `pip`, nenhuma instalacao:
+
+```bash
+py -I script/releitura_export.py "%TEMP%/fantozzi_3c41/tx38_minimo.xlsx" --modo tx38
+py -I script/releitura_export.py "%TEMP%/fantozzi_3c41/export_percurso.xlsx" ^
+    --modo export --manifesto "%TEMP%/fantozzi_3c41/export_percurso.manifesto.json"
+```
+
+O modo `export` confronta **campo por campo**, nao por amostra: o teste de
+integracao deposita, ao lado do workbook, um **manifesto** JSON do modelo —
+cabecalhos, linhas, valores e tipo de cada celula — e o script compara todas.
+Medido em 2026-10-30: 13 folhas, 411 celulas, 992 confrontos. O manifesto nasce
+do mesmo modelo que gera o ficheiro, por isso o script tem tambem um conjunto
+de **expectativas explicitas** escritas a mao (totais, chaves, estados, autores
+e motivos): uma mutacao de qualquer uma delas faz falhar o confronto, como a
+contraprova de `R3C41-04` verificou numa copia fora do repositorio.
+`--modo export` sem `--manifesto` sai com 2 e declara que a verificacao **nao**
+foi executada.
+
+O script sai com 0 quando todos os confrontos tornam, com 1 na primeira
+discordancia e com 2 quando o ambiente nao permite a verificacao. As
+**divergencias conhecidas do leitor** estao registadas uma por confronto, com
+entrada, versao e resultado observado; o script nao declara o confronto
+integralmente superado quando alguma se apresenta, `TX-37` fica nao
+integralmente superada e `TX-19` fica `NAO_EXECUTADA`. Qualquer divergencia
+**diferente** — ou a sua desaparicao, que tornaria a registacao obsoleta, ou
+uma registacao que o giro nao exercitou — sai com 1.
+
+Sao cinco confrontos, de duas causas distintas, medidas com `openpyxl` 3.1.5:
+
+| Confronto | Entrada | Observado | Causa |
+|---|---|---|---|
+| `caso[escape_protegido].texto` (modo `tx38`) | `_x005F_x0041_` | `_x0041_` | o writer protege `_x` corretamente; o leitor descodifica mais de uma vez |
+| `limites!5:descricao` | a frase do limite `ESCAPE_LEITOR`, que **cita** a sequencia protegida | a mesma frase com um nivel perdido | a mesma causa, numa celula do workbook real |
+| `decisoes!2:motivo`, `decisoes!3:motivo` e as duas expectativas explicitas correspondentes | `visto e aceito a\rb` | `visto e aceito a_x000D_b` | o writer codifica o CR como `_x000D_` segundo `ST_Xstring`, verificado no `xl/sharedStrings.xml`; este leitor **nao** descodifica essa sequencia |
+
+O retorno de carro e' um caractere XML 1.0 valido: nao e' recusado nem
+compensado. A fidelidade do **ficheiro** esta' demonstrada; a fidelidade
+deste **leitor** nestes casos esta' declarada como limite.
+
+Uma excepcao concede-se ao **caso esperado**, nunca ao resultado observado.
+Cinco condicoes, todas necessarias: o modo da registacao, a **entrada**
+registada igual ao valor esperado, o leitor e a sua **versao** iguais aos da
+medicao, o resultado observado igual ao registado, e o **pacote deste giro** a
+representar exactamente o valor esperado — lido com `zipfile` e `xml.etree` e
+descodificado em **passagem unica** (`ST_Xstring`). Falta uma, e o confronto e'
+uma discordancia: um ficheiro que representa outra coisa e' um defeito do
+**ficheiro**, mesmo quando o leitor produz precisamente o resultado da sua
+anomalia conhecida. Sem isto, `a_x005F_x000D_b` no pacote — quinze caracteres
+literais, sem retorno de carro — passaria por um ficheiro correcto, porque
+`openpyxl` mostra o mesmo nos dois casos.
+
+A contraprova desse confine e' permanente:
+
+```bash
+py -I script/controprova_rilettura.py
+```
+
+Prepara copias alteradas, deixa o manifesto **intacto**, executa a verificacao
+sem a modificar e compara os codigos de saida. Medido em 2026-10-30: baseline
+**0**, sem manifesto **2**, sete mutacoes ordinarias **1** cada uma com a
+celula nomeada, e duas alteracoes **mascaradas** por uma divergencia conhecida
+— uma em `decisoes!2:motivo`, outra em `limites!5:descricao` — tambem **1**.
+Nessas duas o leitor devolve exactamente o resultado registado: sao as
+condicoes sobre o pacote que as rejeitam.
 
 Os testes de IO trabalham em arenas sob a directoria temporaria do sistema
-(`%TEMP%\fantozzi_3c3b1\`), uma por teste, e **nao** apagam nada fora dela. Um
-`TEMP` nao gravavel faz falhar os testes de IO sem que haja nada de errado no
-codigo.
+(`%TEMP%\fantozzi_3c3b1\`, `%TEMP%\fantozzi_3c41_io\`), uma por teste, e
+**nao** apagam nada fora dela. Um `TEMP` nao gravavel faz falhar os testes de
+IO sem que haja nada de errado no codigo.
 
 O teste entre processos reexecuta o **proprio binario de teste** com
 `std::env::current_exe()` e `--exact`, passando o papel por variavel de

@@ -9,13 +9,26 @@
 //!
 //! Fase 3B: alocacao de NF-e em lancamentos com reconciliacao ([`alocacao`]).
 //!
-//! Fase 3C/3D (pendentes): pre-livro diario, revisao, exportacao e DRE.
+//! Fase 3C.2: pre-livro diario em memoria ([`prelivro`]).
+//!
+//! Fase 3C.3.a: impressoes canonicas ([`impressao`]) e revisao humana
+//! ([`revisao`]).
+//!
+//! Fase 3C.3.b: arquivo autoritativo ([`arquivo`]) e seu protocolo de IO
+//! ([`arquivo_io`]).
+//!
+//! Fase 3C.4.1: export derivado ([`export`]), adaptador do formato ([`xlsx`])
+//! e escrita do arquivo derivado ([`export_io`]).
+//!
+//! Fase 3C.5/3D (pendentes): uso pela CLI e DRE gerencial.
 
 pub mod alocacao;
 pub mod arquivo;
 pub mod arquivo_io;
 pub mod classificacao;
 pub(crate) mod dinheiro;
+pub mod export;
+pub mod export_io;
 pub mod impressao;
 pub mod modelos;
 pub mod nfe;
@@ -23,3 +36,4 @@ pub mod normalizacao;
 pub mod prelivro;
 pub mod regras;
 pub mod revisao;
+pub mod xlsx;
