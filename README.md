@@ -26,7 +26,8 @@ Porte em Rust de [Programma_registrazioni-contabili](https://github.com/lucamagg
 | 3C.4 — especificacao | Export derivado: esquema, fidelidade, protocolo de escrita | **PRONTA** (`SPECIFICA_FASE3C4_EXPORT_DERIVATO.md`): decisoes aprovadas e esito final do audit registrados |
 | 3C.4.1 | Export XLSX derivado: modelo (`export.rs`), adaptador (`xlsx.rs`), escrita (`export_io.rs`) | **AUDIT TECNICO INDEPENDENTE SUPERADO** em 2026-10-30: R3C41-01..04 fechados, inclusive o residuo da releitura. Compatibilidade Excel continua **NON_VERIFICATO** |
 | 3C.4.2 | Adaptadores de entrada bruta (D12), import do historico (D11) | NAO_INICIADA: D11(a) e D12(a) adiaram ambos |
-| 3C.5 | Uso pela CLI | NAO_INICIADA |
+| 3C.5.a | Uso pela CLI: `arquivar-nfe` (pasta -> arquivo autoritativo) e `exportar-diagnostico` (uma execucao -> XLSX) | **IMPLEMENTADA**, a aguardar audit independente. Decisoes D27-D34 aprovadas por Luca em 2026-10-31 |
+| 3C.5.b | Resto do uso pela CLI: resultado entre execucoes (D32), perfis, aprovacao declarada | NAO_INICIADA |
 | 3D | DRE gerencial por competencia | NAO_INICIADA |
 
 Funciona de ponta a ponta: validar a configuracao, ler uma NF-e em XML,
@@ -57,6 +58,58 @@ cargo run -- classificar --tipo despesas --texto "Conta de luz Neoenergia 05/202
 cargo run -- auditar-aliases --tipo produtos            # para onde cada alias leva
 cargo run -- auditar-aliases --tipo produtos --estrito  # divergencias reprovam
 ```
+
+### Fase 3C.5.a: da pasta ao Excel diagnostico
+
+Uma linha por comando: em PowerShell a barra invertida final **nao** continua
+a linha. A directoria de destino tem de existir antes, porque os protocolos de
+IO nao criam directorias.
+
+```powershell
+New-Item -ItemType Directory -Force dados | Out-Null
+
+# Primeiro arranque: le a pasta inteira e cria UMA execucao.
+cargo run -- arquivar-nfe --pasta dados/entrada/2026-05 --arquivo dados/arquivo.json --inicializar --lote fonte-maio-r1 --lote-data 2026-05-31 --lote-descricao "pasta de maio" --operador "Luca Maggi" --motivo "primeira importacao"
+
+cargo run -- exportar-diagnostico --arquivo dados/arquivo.json --lote fonte-maio-r1 --saida dados/diagnostico_maio.xlsx --operador "Luca Maggi" --motivo "diagnostico de maio"
+
+# Relancamento depois de acrescentar uma NF-e: rele' tudo, com um lote NOVO.
+cargo run -- arquivar-nfe --pasta dados/entrada/2026-05 --arquivo dados/arquivo.json --lote fonte-maio-r2 --lote-data 2026-05-31 --lote-descricao "pasta de maio" --operador "Luca Maggi" --motivo "relancamento"
+
+cargo run -- exportar-diagnostico --arquivo dados/arquivo.json --lote fonte-maio-r2 --saida dados/diagnostico_maio.xlsx --se-existir substituir --operador "Luca Maggi" --motivo "relancamento"
+```
+
+Uma execucao arquivada e' **imutavel**: cada relancamento declara um `--lote`
+novo e rele' a pasta toda. Um documento ja' arquivado com conteudo identico
+nao e' duplicado no resultado: aparece como `JA_ARQUIVADO_IDENTICO` e e'
+contado a parte. O resultado cobre **a pasta no momento do relancamento**, nao
+o mes: uma factura retirada da pasta continua no historico do arquivo e nao
+entra na execucao nova (D34).
+
+A importacao **nao aprova nada**: nenhum `EventoRevisao` nasce destes
+comandos, e por isso as folhas `decisoes`, `extrato_revisado` e `avisos` do
+XLSX ficam sem linhas de dados. Aprovar continua a ser um acto declarado, de
+um bloco posterior.
+
+Codigos de saida de `arquivar-nfe`: `0` arquivado; `1` configuracao ou
+argumentos; `2` XML nao processavel (**nada publicado**); `3` duas chaves
+iguais na mesma execucao; `4` chave ja' arquivada com **conteudo alocado
+diverso**; `5` arquivado **com reserva** (estado tecnico `PARCIAL`/`ERRO`);
+`6` recusa de IO antes do commit; `7` recusa por `--recusar-nao-ok`. De
+`exportar-diagnostico`: `0` publicado; `1` configuracao, argumentos ou lote
+inexistente; `3` destino ja' existente com `--se-existir recusar`; `4` destino
+que coincide com o arquivo; `6` outra recusa de IO. Cada mensagem diz se o
+ficheiro final **foi** ou **nao foi** publicado.
+
+**Limite declarado (D33):** se as regras de classificacao mudarem entre dois
+relancamentos, o conteudo alocado muda **nos documentos afectados por essa
+mudanca** — nao necessariamente em todos — e o comando recusa com `4`. Como um
+lote e' um so' commit, basta um documento afectado para parar a execucao
+inteira. A diferenca pode vir da fonte **ou** da configuracao — as regras
+entram na impressao de conteudo (`conta_id`, `conta_nome`, `grupo_conta`,
+`alertas`), e o arquivo guarda a identidade do plano, nao a das regras — por
+isso a mensagem **nao** atribui a causa. Guardar a identidade das regras seria
+uma melhoria de proveniencia, nao a condicao logica da recusa.
 
 Codigo de saida: `0` = APROVADO, `1` = REPROVADO ou erro de carregamento.
 `--estrito` serve para **alertas**: violacoes de contrato sao sempre ERRO e
@@ -440,6 +493,32 @@ O Python so le `regras` e `conta_fallback_id`. C13 torna visivel o resto:
 Decidir se essas duas regras devem passar a valer e' uma mudanca de
 comportamento, nao de porte: fica fora da fase 2.
 
+### Fase 3C.5.a - uso pela CLI
+
+Dois comandos, **um** ficheiro escrito por cada um. Nenhuma regra contabil
+nova: compoem funcoes ja' auditadas e acrescentam somente os contratos do uso.
+
+| Contrato | Regra | Onde | Prova |
+|---|---|---|---|
+| CLI-01 | esitos distintos e determinados por comando, e cada mensagem diz se o ficheiro final foi ou **nao** foi publicado | `main.rs`, `importacao::codigos_*` | `tx50`-`tx62` |
+| CLI-01, residuos | depois de uma recusa de IO, os residuos do tentativo realmente presentes sao **nomeados** com caminho e dimensao, e diz-se que nao sao apagados sozinhos. Tres esitos distintos: presente com a dimensao **real**, ausente, ou `NON_DISPONIVEL` quando a verificacao nao e' possivel — uma dimensao desconhecida nunca se escreve `0`, porque zero bytes e' uma medida real | `main.rs` (`olhar_residuo`, usado por `residuos_do_export` e `residuos_do_arquivo`, que reusa `arquivo_io::candidatos`) | `tx64`, `tx65`, e os tres testes de `olhar_residuo` |
+| CLI-02 | a importacao **nao** cria nenhuma decisao humana; sem eventos o estado da vista segue o esito tecnico (`TECNICO_OK` ou `TECNICO_REVISAR`, nunca `APROVADO_POR_PESSOA`) | `main.rs`, `importacao.rs` | `tx50`, `tx53`, `tx63`, modo `percurso-cli` |
+| CLI-03 | duas chaves iguais na mesma execucao: recusa que nomeia os dois ficheiros | `importacao::classificar` | `tx56` |
+| CLI-04 | chave ja' arquivada com conteudo identico: **reuso declarado** entre execucoes, nao duplicacao no resultado | `importacao::classificar` | `tx51` |
+| CLI-05 | chave ja' arquivada com conteudo alocado diverso: recusa, e a mensagem diz o que foi comparado sem atribuir a causa (D33) | `main.rs` | `tx57` |
+| CLI-06 | nenhuma criacao implicita do arquivo: sem `--inicializar` num arquivo ausente e com o flag num arquivo existente sao **duas** recusas | `main.rs` | `tx54`, `tx55` |
+| CLI-07 | uma execucao arquivada e' imutavel: um `--lote` ja' usado e' recusado explicando-o | `main.rs` | `tx52` |
+| CLI-08 | o resultado cobre **uma** execucao, nomeada na folha `proveniencia`; `--lote` aceita um valor e nao existe forma de nomear varios | `main.rs` | `tx60`, modo `percurso-cli` |
+| CLI-09 | identidade do lote, operador e motivo **declarados**; o instante leva a sua fonte (`DECLARADO` ou `RELOGIO_DO_SISTEMA`) na saida do comando (D27) | `main.rs` | `tx50` |
+| D28 | a impressao real do plano fica em `IdentidadePlano::sha256_arquivo`, em vez de `None` | `main.rs`, `arquivo::sha256_dos_bytes` | `tx63`, modo `percurso-cli` |
+| D30 | documento com estado tecnico `PARCIAL`/`ERRO`: conservado com os seus problemas e saida `5`; `--recusar-nao-ok` recusa **antes** de publicar, com saida `7` | `main.rs` | `tx58`, `tx59` |
+| D34 | o resultado cobre a pasta **no momento do relancamento**; uma factura retirada continua no historico e nao entra na execucao nova | `main.rs` (le a pasta) | `tx51` |
+
+A barreira continua a ser a de sempre: `construir_pre_livro`, atravessada por
+`aplicar_revisao`. A busca na pasta **nao** e' recursiva, como no Python
+(`cli.py:_find_xml_files`): os ficheiros directamente dentro dela, em ordem de
+nome minusculo.
+
 ### C10 em detalhe: ausencia nao e' zero
 
 Um valor facultativo ausente **nao** vira `0`. `Nfe::valor_cobranca` e
@@ -565,9 +644,16 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-389 testes: 367 de unidade na lib, 3 no binario, 19 de integracao (13 de CLI,
-2 de persistencia entre processos e 4 do percurso composto do export). Os 52
-novos sao da fase 3C.4.1 (34 em `export.rs`, 12 em `export_io.rs`, 2 em
+408 testes: 367 de unidade na lib, 6 no binario, 35 de integracao (13 de CLI,
+2 de persistencia entre processos, 4 do percurso composto do export e **16 do
+percurso da CLI 3C.5.a**). Os 16 da 3C.5.a estao em
+`tests/cli_percurso_nfe.rs`: treze provam os codigos de saida e a composicao,
+um deposita o workbook e o manifesto para a releitura independente, e `tx64` e
+`tx65` provam que um erro de IO **depois** da criacao do temporario o nomeia,
+no export e no arquivo (`R3C5A-I01`). Tres dos testes do binario sao os tres
+esitos de `olhar_residuo`: presente com a dimensao real, ausente, e
+verificacao impossivel que **nao** vira zero. Os 52
+anteriores sao da fase 3C.4.1 (34 em `export.rs`, 12 em `export_io.rs`, 2 em
 `xlsx.rs`, 4 em `tests/export_releitura.rs`); sete deles sao regressoes de
 rilevos do audit de 2026-10-30: quatro de `R3C41-01`/`-02`/`-03` e tres de
 `R3C41-05`, a fonte errada de `diagnostico.status_tecnico`. Os 337 anteriores
@@ -581,7 +667,23 @@ Nenhum `pip`, nenhuma instalacao:
 py -I script/releitura_export.py "%TEMP%/fantozzi_3c41/tx38_minimo.xlsx" --modo tx38
 py -I script/releitura_export.py "%TEMP%/fantozzi_3c41/export_percurso.xlsx" ^
     --modo export --manifesto "%TEMP%/fantozzi_3c41/export_percurso.manifesto.json"
+
+py -I script/releitura_export.py "%TEMP%/fantozzi_3c5a/deposito_<pid>/dados/diagnostico.xlsx" ^
+    --modo percurso-cli ^
+    --manifesto "%TEMP%/fantozzi_3c5a/deposito_<pid>/dados/diagnostico.manifesto.json"
 ```
+
+O modo `percurso-cli` (fase 3C.5.a) corre os **mesmos** confrontos sobre o
+ficheiro com expectativas **suas**: aquele workbook nasce da CLI, de tres NF-e
+derivadas do campione real, e **sem nenhuma aprovacao**. As expectativas do
+modo `export` ficam intactas: sao cabladas na fixture 3C.4.1 — lote
+`lote-export-3c41`, Alice e Bob, `APROVADO_POR_PESSOA` — e nao se aplicam a
+este ingresso. Medido em 2026-10-31: 3291 confrontos, 1 divergencia conhecida
+(a frase do `limites`, que todo export leva identica), 0 discordancias. O
+manifesto deste modo **nao** e' um output do comando: escreve-o o teste
+`tx63`, na sua arena, relendo com a API publica o arquivo que a CLI publicou.
+Um segundo ficheiro escrito pelo proprio comando ficaria fora da proteccao de
+`FonteProtegida`.
 
 O modo `export` confronta **campo por campo**, nao por amostra: o teste de
 integracao deposita, ao lado do workbook, um **manifesto** JSON do modelo —
@@ -631,6 +733,8 @@ A contraprova desse confine e' permanente:
 
 ```bash
 py -I script/controprova_rilettura.py
+py -I script/controprova_rilettura.py --modo percurso-cli ^
+    --workbook <deposito>/diagnostico.xlsx --manifesto <deposito>/diagnostico.manifesto.json
 ```
 
 Prepara copias alteradas, deixa o manifesto **intacto**, executa a verificacao
@@ -640,6 +744,15 @@ celula nomeada, e duas alteracoes **mascaradas** por uma divergencia conhecida
 — uma em `decisoes!2:motivo`, outra em `limites!5:descricao` — tambem **1**.
 Nessas duas o leitor devolve exactamente o resultado registado: sao as
 condicoes sobre o pacote que as rejeitam.
+
+O modo `percurso-cli` tem as **suas** copias alteradas, porque as celulas da
+fixture nao existem no workbook da CLI, que nao tem decisoes nem extrato
+revisado: e' justamente o ponto de `CLI-02`. Medido em 2026-10-31: baseline
+**0**, sem manifesto **2**, quatro mutacoes **1** cada uma com a celula
+nomeada — um valor, um total, o `estado_revisao` levado a
+`APROVADO_POR_PESSOA` e o `status_tecnico` levado a `APROVADO` — e a alteracao
+mascarada de `limites!5:descricao` tambem **1**. A contraprova da fixture
+continua com os seus doze casos, inalterada.
 
 Os testes de IO trabalham em arenas sob a directoria temporaria do sistema
 (`%TEMP%\fantozzi_3c3b1\`, `%TEMP%\fantozzi_3c41_io\`), uma por teste, e

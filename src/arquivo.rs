@@ -1598,7 +1598,12 @@ fn resumo(texto: &str) -> String {
 /// Lavora sui byte perche' l'impronta deve esistere anche per un file che non
 /// si riesce a interpretare: e' cio' che rende confrontabile uno stato
 /// corrotto (riscontro R3C3B1-02).
-pub(crate) fn sha256_dos_bytes(bytes: &[u8]) -> String {
+/// Impronta dei byte, esadecimale minuscola.
+///
+/// **D28**: pubblica perche' la CLI riempia `IdentidadePlano::sha256_arquivo`
+/// con l'impronta reale del piano, invece di lasciarla `None`. Nessuna
+/// dipendenza nuova: e' lo stesso `sha2` che il formato usa gia'.
+pub fn sha256_dos_bytes(bytes: &[u8]) -> String {
     impressao::sha256_hex(bytes)
 }
 

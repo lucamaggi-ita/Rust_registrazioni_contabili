@@ -119,6 +119,45 @@ MASCHERATE = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Modo `percurso-cli` (fase 3C.5.a)
+# ---------------------------------------------------------------------------
+#
+# Il workbook della CLI non ha ne' decisioni ne' estratto revisionato — e'
+# proprio il punto di `CLI-02` — quindi le mutazioni della fixture non sono
+# applicabili: le loro celle non esistono. Queste sono le sue.
+MUTAZIONI_PERCURSO_CLI = [
+    # Un importo.
+    ("valor", "diagnostico", 2, "valor", "99.00"),
+    ("totale", "resumos", 2, "valor_total", "99.00"),
+    # Uno stato, e qui l'alterazione piu' grave di tutte per questo percorso:
+    # un'importazione che sembra avere approvato qualcosa.
+    ("estado_revisao", "diagnostico", 2, "estado_revisao", "APROVADO_POR_PESSOA"),
+    # `R3C41-05`: la fonte dello stato tecnico, di nuovo.
+    ("stato_tecnico", "diagnostico", 2, "status_tecnico", "APROVADO"),
+]
+
+# Una sola eccezione e' registrata anche per questo modo: la frase del foglio
+# `limites`, che ogni export porta identica.
+MASCHERATE_PERCURSO_CLI = [
+    (
+        "mascherata_escape",
+        "limites",
+        5,
+        "descricao",
+        toglie_un_livello_di_protezione,
+        "limites!5:descricao",
+    ),
+]
+
+
+def tabelle_do_modo(modo: str):
+    """Mutazioni e mascherate **di questo modo**: le celle di un percorso non
+    esistono necessariamente nell'altro."""
+    if modo == "percurso-cli":
+        return MUTAZIONI_PERCURSO_CLI, MASCHERATE_PERCURSO_CLI
+    return MUTAZIONI, MASCHERATE
+
 
 def nome_breve(percorso: pathlib.Path) -> str:
     return percorso.name
@@ -285,8 +324,13 @@ def altera_in_modo_mascherato(
     return codifica_nuova
 
 
-def esegui(script: pathlib.Path, workbook: pathlib.Path, manifesto: pathlib.Path | None):
-    comando = [sys.executable, "-I", str(script), str(workbook), "--modo", "export"]
+def esegui(
+    script: pathlib.Path,
+    workbook: pathlib.Path,
+    manifesto: pathlib.Path | None,
+    modo: str = "export",
+):
+    comando = [sys.executable, "-I", str(script), str(workbook), "--modo", modo]
     if manifesto is not None:
         comando += ["--manifesto", str(manifesto)]
     return subprocess.run(
@@ -311,6 +355,17 @@ def main() -> int:
     analizzatore.add_argument(
         "--manifesto", default=str(temporanea / "export_percurso.manifesto.json")
     )
+    analizzatore.add_argument(
+        "--modo",
+        choices=["export", "percurso-cli"],
+        default="export",
+        help=(
+            "quale percorso si controprova. `export` e' la fixture 3C.4.1 con "
+            "le sue due approvazioni; `percurso-cli` e' il workbook che la CLI "
+            "produce da una cartella di NF-e, e vuole --workbook e --manifesto "
+            "del suo deposito"
+        ),
+    )
     argomenti = analizzatore.parse_args()
 
     script = pathlib.Path(argomenti.script)
@@ -331,22 +386,31 @@ def main() -> int:
         print(f"AMBIENTE: openpyxl non disponibile: {errore}", file=sys.stderr)
         return CODICE_AMBIENTE
 
-    arena = pathlib.Path(tempfile.gettempdir()) / "fantozzi_3c41_controprova"
+    arena = (
+        pathlib.Path(tempfile.gettempdir())
+        / f"fantozzi_controprova_{argomenti.modo}"
+    )
+    mutazioni, mascherate = tabelle_do_modo(argomenti.modo)
     shutil.rmtree(arena, ignore_errors=True)
     arena.mkdir(parents=True)
     print(f"arena  {arena}")
     print(f"script {script}")
+    print(f"modo   {argomenti.modo}")
 
     casi: list[tuple[str, int, str | None, subprocess.CompletedProcess]] = []
 
     # 1. la baseline, non alterata
-    casi.append(("baseline", 0, None, esegui(script, workbook, manifesto)))
+    casi.append(
+        ("baseline", 0, None, esegui(script, workbook, manifesto, argomenti.modo))
+    )
 
     # 2. la baseline senza manifesto
-    casi.append(("senza_manifesto", 2, None, esegui(script, workbook, None)))
+    casi.append(
+        ("senza_manifesto", 2, None, esegui(script, workbook, None, argomenti.modo))
+    )
 
     # 3. le mutazioni ordinarie
-    for etichetta, folha, riga, coluna, nuovo in MUTAZIONI:
+    for etichetta, folha, riga, coluna, nuovo in mutazioni:
         copia = arena / f"mutato_{etichetta}.xlsx"
         shutil.copy2(workbook, copia)
         livro = openpyxl.load_workbook(copia)
@@ -360,12 +424,12 @@ def main() -> int:
                 f"mutazione_{etichetta}",
                 1,
                 f"{folha}!{riga}:{coluna}",
-                esegui(script, copia, manifesto),
+                esegui(script, copia, manifesto, argomenti.modo),
             )
         )
 
     # 4. le alterazioni mascherate da una divergenza nota
-    for etichetta, folha, riga, coluna, codifica, chiave in MASCHERATE:
+    for etichetta, folha, riga, coluna, codifica, chiave in mascherate:
         copia = arena / f"{etichetta}.xlsx"
         applicata = altera_in_modo_mascherato(
             workbook, copia, folha, riga, coluna, codifica
@@ -380,7 +444,9 @@ def main() -> int:
         print(f"  {etichetta}")
         print(f"      nel pacchetto   {applicata!r}")
         print(f"      openpyxl mostra {mostrato!r}")
-        casi.append((etichetta, 1, chiave, esegui(script, copia, manifesto)))
+        casi.append(
+            (etichetta, 1, chiave, esegui(script, copia, manifesto, argomenti.modo))
+        )
 
     print()
     print(f"{'caso':<28} {'atteso':>6} {'osservato':>9}  esito")

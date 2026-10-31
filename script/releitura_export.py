@@ -18,6 +18,13 @@ Uso:
     py -I script/releitura_export.py <percorso.xlsx> --modo tx38
     py -I script/releitura_export.py <percorso.xlsx> --modo export \
         --manifesto <percorso.manifesto.json>
+    py -I script/releitura_export.py <percorso.xlsx> --modo percurso-cli \n        --manifesto <percorso.manifesto.json>
+
+I modi `export` e `percurso-cli` fanno gli stessi confronti sul file e
+hanno attese **diverse**: il primo e' la fixture del percorso 3C.4.1, con
+le sue due approvazioni; il secondo e' il workbook che la CLI della fase
+3C.5.a produce da una cartella di NF-e reali, dove nessuna approvazione
+esiste.
 """
 
 from __future__ import annotations
@@ -317,6 +324,90 @@ INDICADORES_ATTESI: dict[str, tuple[str, float]] = {
     "linhas_excluidas_do_extrato": ("0", 0.0),
 }
 
+# ---------------------------------------------------------------------------
+# Modo `percurso-cli` (fase 3C.5.a): attese **sue**, non quelle della fixture
+# ---------------------------------------------------------------------------
+#
+# `R3C5A-03`: le attese di `--modo export` sono cablate sulla fixture del
+# percorso 3C.4.1 — lotto `lote-export-3c41`, importo 10.00, due eventi,
+# Alice e Bob, `APROVADO_POR_PESSOA`. Un workbook nato dalla CLI su una
+# cartella di NF-e reali **non** ha nulla di tutto questo, e generare un
+# manifesto diverso non basterebbe: le attese esplicite girano sul workbook
+# comunque. Quindi il percorso nuovo ha il suo modo, e quelle della fixture
+# restano intatte.
+#
+# Valori **misurati** sul deposito di `tests/cli_percurso_nfe.rs`
+# (`tx63`): tre NF-e derivate dal campione reale, nessuna approvazione.
+ATTESE_PERCURSO_CLI: list[tuple[str, int, str, object, str]] = [
+    # L'esecuzione che il risultato copre: un lotto, non un mese.
+    ("proveniencia", 2, "formato", FORMATO_ATTESO, "s"),
+    ("proveniencia", 2, "versao_schema", "1", "s"),
+    ("proveniencia", 2, "lote_id", "fonte-maio-r1", "s"),
+    ("proveniencia", 2, "lote_gerado_em", "2026-05-31", "s"),
+    ("proveniencia", 2, "lote_descricao", "pasta de maio", "s"),
+    ("proveniencia", 2, "plano_arquivado_versao", "1.0", "s"),
+    ("proveniencia", 2, "plano_coincide", "SIM", "s"),
+    ("proveniencia", 2, "apresentacao_divergente", "NAO", "s"),
+    # `CLI-02`: l'importazione non crea nessuna decisione umana. Qui si vede
+    # nei numeri, non in una promessa.
+    ("proveniencia", 2, "eventos_no_arquivo", 0, "n"),
+    ("proveniencia", 2, "eventos_aplicados", 0, "n"),
+    ("proveniencia", 2, "eventos_nao_aplicados", 0, "n"),
+    # I tre stati con le tre fonti distinte (`R3C41-05`), senza approvazioni:
+    # il tecnico e' OK, lo stato della vista e' TECNICO_OK — **non**
+    # APROVADO_POR_PESSOA — e nulla entra nell'estratto approvato.
+    ("diagnostico", 2, "conta_id", "2.01.002", "s"),
+    ("diagnostico", 2, "valor", "20.00", "s"),
+    ("diagnostico", 2, "status_tecnico", "OK", "s"),
+    ("diagnostico", 2, "estado_revisao", "TECNICO_OK", "s"),
+    ("diagnostico", 2, "particao", "OK", "s"),
+    ("diagnostico", 2, "no_extrato_aprovado", "NAO", "s"),
+    ("diagnostico", 2, "no_extrato_revisado", "NAO", "s"),
+    ("diagnostico", 5, "conta_id", "2.01.004", "s"),
+    ("diagnostico", 5, "valor", "10.00", "s"),
+    ("diagnostico", 5, "status_tecnico", "OK", "s"),
+    ("diagnostico", 5, "estado_revisao", "TECNICO_OK", "s"),
+]
+
+# Tre NF-e da tre articoli: nove righe, 105.00 in tutto, e **niente**
+# approvato, quindi tutte le nove righe restano fuori dall'estratto approvato.
+INDICADORES_PERCURSO_CLI: dict[str, tuple[str, float]] = {
+    "documentos": ("3", 3.0),
+    "documentos_ok": ("3", 3.0),
+    "documentos_erro": ("0", 0.0),
+    "linhas": ("9", 9.0),
+    "linhas_ok": ("9", 9.0),
+    "linhas_aprovado": ("0", 0.0),
+    "linhas_revisar": ("0", 0.0),
+    "valor_total": ("105.00", 105.0),
+    "valor_ok": ("105.00", 105.0),
+    "valor_aprovado": ("0.00", 0.0),
+    "valor_extrato_aprovado": ("0.00", 0.0),
+    "linhas_excluidas_do_extrato": ("9", 9.0),
+}
+
+
+def attese_do_modo(modo: str) -> list[tuple[str, int, str, object, str]]:
+    """Le attese esplicite **di questo modo**, mai quelle di un altro."""
+    return ATTESE_PERCURSO_CLI if modo == "percurso-cli" else ATTESE_ESPLICITE
+
+
+def indicadores_do_modo(modo: str) -> dict[str, tuple[str, float]]:
+    return (
+        INDICADORES_PERCURSO_CLI if modo == "percurso-cli" else INDICADORES_ATTESI
+    )
+
+
+def _modi_da_nota(nota: dict) -> tuple[str, ...]:
+    """I modi a cui una registrazione appartiene.
+
+    Resta una stringa quando la divergenza vale per un solo percorso; una
+    tupla dichiara che la **stessa** cella diverge in piu' percorsi, come la
+    frase del foglio `limites`, che ogni export porta identica.
+    """
+    modo = nota["modo"]
+    return (modo,) if isinstance(modo, str) else tuple(modo)
+
 # I limiti che il file deve dichiarare di sé, con il loro stato.
 LIMITES_ATTESI: dict[str, str] = {
     "DERIVADO_SEM_RETORNO": "DICHIARATO",
@@ -428,7 +519,9 @@ for _chiave_cr, _riga_cr in (
 # frase cambia, questa registrazione diventa una discordanza da esaminare, ed
 # e' voluto. La registrazione e' identificata dall'ingresso.
 DIVERGENZE_NOTE["limites!5:descricao"] = {
-    "modo": "export",
+    # Ogni export porta questa frase identica, quindi la divergenza si
+    # presenta in entrambi i percorsi.
+    "modo": ("export", "percurso-cli"),
     "cella": {"folha": "limites", "linha": 5, "coluna": "descricao"},
     "ingresso": "Um texto que contem uma sequencia semelhante a _xHHHH_ ja' protegida pode ser mostrado de forma diferente: medido com openpyxl 3.1.5, a entrada _x005F_x0041_ foi relida _x0041_. O XML produzido e' correto; a perda vem do decodificador do leitor.",
     "lettore": "openpyxl",
@@ -516,7 +609,7 @@ class Esito:
         self.note_viste.add(nome)
         motivi: list[str] = []
 
-        if nota["modo"] != self.modo:
+        if self.modo not in _modi_da_nota(nota):
             motivi.append(
                 f"la registrazione appartiene al modo {nota['modo']!r} e "
                 f"questo giro e' {self.modo!r}"
@@ -586,7 +679,7 @@ class Esito:
         del_modo = {
             nome
             for nome, nota in DIVERGENZE_NOTE.items()
-            if nota["modo"] == self.modo
+            if self.modo in _modi_da_nota(nota)
         }
         return sorted(del_modo - self.note_viste)
 
@@ -790,7 +883,7 @@ def confronto_esplicito(livro, esito: "Esito") -> None:
     fallire.
     """
     print("--- attese esplicite ---")
-    for folha_nome, riga, coluna, atteso, tipo in ATTESE_ESPLICITE:
+    for folha_nome, riga, coluna, atteso, tipo in attese_do_modo(esito.modo):
         folha = livro[folha_nome]
         cabecalho = [c.value for c in next(folha.iter_rows(min_row=1, max_row=1))]
         if coluna not in cabecalho:
@@ -820,7 +913,7 @@ def confronto_esplicito(livro, esito: "Esito") -> None:
         )
         for r in range(2, indicadores.max_row + 1)
     }
-    for nome, (texto, numero) in INDICADORES_ATTESI.items():
+    for nome, (texto, numero) in indicadores_do_modo(esito.modo).items():
         letto = trovati.get(nome, (None, None))
         esito.confronta(f"esplicito.indicadores[{nome}].valor", texto, letto[0])
         esito.confronta(
@@ -864,7 +957,41 @@ def modo_export(
 
     confronto_campo_per_campo(livro, manifesto, esito)
     confronto_esplicito(livro, esito)
+    if esito.modo == "percurso-cli":
+        confronti_do_percurso_cli(livro, esito)
     livro.close()
+
+
+def confronti_do_percurso_cli(livro, esito: "Esito") -> None:
+    """Due fatti che il percorso della CLI deve mostrare **nel file**.
+
+    1. `D28`: l'impronta del piano archiviato non e' piu' assente. Si verifica
+       la **forma**, 64 esadecimali, e non un valore scritto a mano: cablarlo
+       vorrebbe dire copiare qui i byte di una fonte canonica, e un suo
+       aggiornamento legittimo farebbe fallire la rilettura.
+    2. `CLI-02`: senza approvazioni i fogli delle decisioni, dell'estratto
+       revisionato e degli avvisi non hanno nessuna riga di dati. E' il
+       controllo piu' diretto che un'importazione non approva niente.
+    """
+    print("--- confronti del percorso CLI ---")
+    prov = livro["proveniencia"]
+    cabecalho = [c.value for c in next(prov.iter_rows(min_row=1, max_row=1))]
+    impronta = prov.cell(
+        row=2, column=cabecalho.index("plano_arquivado_sha256") + 1
+    ).value
+    esito.afferma(
+        "percurso_cli.plano_arquivado_sha256.presente",
+        isinstance(impronta, str) and bool(re.fullmatch(r"[0-9a-f]{64}", impronta)),
+        f"attesa un'impronta di 64 esadecimali, trovato {impronta!r}",
+    )
+    for nome in ("decisoes", "extrato_revisado", "avisos"):
+        folha = livro[nome]
+        # `max_row` conta l'intestazione: una sola riga significa nessun dato.
+        esito.afferma(
+            f"percurso_cli.{nome}.sem_linhas",
+            folha.max_row <= 1,
+            f"attese zero righe di dati in {nome}, trovate {folha.max_row - 1}",
+        )
 
 
 def main() -> int:
@@ -872,7 +999,7 @@ def main() -> int:
     analizzatore.add_argument("caminho", help="workbook da rileggere")
     analizzatore.add_argument(
         "--modo",
-        choices=["tx38", "export"],
+        choices=["tx38", "export", "percurso-cli"],
         default="tx38",
         help="insieme di confronti",
     )
@@ -880,15 +1007,16 @@ def main() -> int:
         "--manifesto",
         help=(
             "manifesto JSON del modello, depositato accanto al workbook dal "
-            "test di integrazione. Obbligatorio con --modo export"
+            "test di integrazione. Obbligatorio con --modo export e con "
+            "--modo percurso-cli"
         ),
     )
     argomenti = analizzatore.parse_args()
 
-    if argomenti.modo == "export" and not argomenti.manifesto:
+    if argomenti.modo in ("export", "percurso-cli") and not argomenti.manifesto:
         print(
-            "AMBIENTE: --modo export richiede --manifesto: senza le attese di "
-            "ogni cella il confronto sarebbe a campione.",
+            f"AMBIENTE: --modo {argomenti.modo} richiede --manifesto: senza "
+            "le attese di ogni cella il confronto sarebbe a campione.",
             file=sys.stderr,
         )
         print(
@@ -913,7 +1041,7 @@ def main() -> int:
         esito.pacote = Pacote(argomenti.caminho)
         if argomenti.modo == "tx38":
             modo_tx38(argomenti.caminho, openpyxl, esito)
-        elif argomenti.modo == "export":
+        elif argomenti.modo in ("export", "percurso-cli"):
             modo_export(
                 argomenti.caminho, argomenti.manifesto, openpyxl, esito
             )

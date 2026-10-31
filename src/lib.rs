@@ -20,7 +20,9 @@
 //! Fase 3C.4.1: export derivado ([`export`]), adaptador do formato ([`xlsx`])
 //! e escrita do arquivo derivado ([`export_io`]).
 //!
-//! Fase 3C.5/3D (pendentes): uso pela CLI e DRE gerencial.
+//! Fase 3C.5.a: composicao da importacao usada pela CLI ([`importacao`]).
+//!
+//! Fase 3C.5.b/3D (pendentes): resto do uso pela CLI e DRE gerencial.
 
 pub mod alocacao;
 pub mod arquivo;
@@ -29,6 +31,7 @@ pub mod classificacao;
 pub(crate) mod dinheiro;
 pub mod export;
 pub mod export_io;
+pub mod importacao;
 pub mod impressao;
 pub mod modelos;
 pub mod nfe;
